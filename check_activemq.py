@@ -13,7 +13,9 @@ import nagiosplugin as np
 #_log = logging.getLogger('nagiosplugin')
 
 def make_url(args, dest):
-	return 'http://'+args.user+':'+args.pwd+'@'+args.host+':'+str(args.port)+'/api/jolokia/read/'+dest
+	return ('http://'+args.user+':'+args.pwd
+			+'@'+args.host+':'+str(args.port)
+			+'/'+args.jolokia+'/'+dest)
 
 def query_url(args):
 	return make_url(args, 'org.apache.activemq:type=Broker,brokerName=localhost')
@@ -67,10 +69,20 @@ def queuesize(args):
 				#_log.error('Loading Queue(s) FAILED. ' + str(e))
 				yield np.Metric('Getting Queue(s) FAILED.', -1, context='size')
 
+	class ActiveMqSummary(np.Summary):
+		def ok(self, results):
+			if len(results) > 1:
+				lenQ = str(len(results))
+				maxQ = str(max(results, key=lambda r: r.metric.value).metric.value)
+				return 'Checked ' + lenQ + ' queues with a maximum length of ' + maxQ
+			else:
+				return super(ActiveMqSummary, self).ok(results)
+
 	if args.queue:
 		check = np.Check(
 				ActiveMqQueueSize(args.queue), ## check ONE queue (or glob)
-				ActiveMqScalarContext('size', args.warn, args.crit)
+				ActiveMqScalarContext('size', args.warn, args.crit),
+				ActiveMqSummary()
 			)
 		check.main()
 	else:
@@ -89,16 +101,9 @@ def health(args):
 			if metric.value == "Good":
 				return self.result_cls(np.Ok, metric=metric)
 			else:
-				return self.result_cls(np.Warning, metric=metric)
+				return self.result_cls(np.Warn, metric=metric)
 		def describe(self, metric):
-			if not self.fmt_metric:
-				return
-			try:
-				return self.fmt_metric(metric, self)
-			except TypeError:
-				return self.fmt_metric.format(
-					name=metric.name, value=metric.value, uom=metric.uom,
-					valueunit=metric.valueunit, min=metric.min, max=metric.max)
+			return metric.value
 
 	class ActiveMqHealth(np.Resource):
 		def probe(self):
@@ -116,7 +121,7 @@ def health(args):
 
 	check = np.Check(
 			ActiveMqHealth(), ## check ONE queue
-			ActiveMqScalarContext('health', args.warn, args.crit)
+			ActiveMqHealthContext('health')
 		)
 	check.main()
 
@@ -142,6 +147,10 @@ def main():
 			help='Username for ActiveMQ admin account. (default: %(default)s)')
 	credentials.add_argument('-p', '--pwd', default='admin',
 			help='Password for ActiveMQ admin account. (default: %(default)s)')
+	parser.add_argument('-j', '--jolokia',
+			#default='api/jolokia/read',
+			default='hawtio/jolokia/read',
+			help='Jolokia URL part. (default: %(default)s)')
 	subparsers = parser.add_subparsers()
 
 	# Sub-Parser for queuesize
