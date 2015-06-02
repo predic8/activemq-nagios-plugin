@@ -77,8 +77,10 @@ def queuesize(args):
 		def ok(self, results):
 			if len(results) > 1:
 				lenQ = str(len(results))
+				minQ = str(min(results, key=lambda r: r.metric.value).metric.value)
+				avgQ = str(sum([r.metric.value for r in results]) / len(results))
 				maxQ = str(max(results, key=lambda r: r.metric.value).metric.value)
-				return 'Checked ' + lenQ + ' queues with a maximum length of ' + maxQ
+				return 'Checked ' + lenQ + ' queues with lengths min/avg/max = ' + '/'.join([minQ,avgQ,maxQ])
 			else:
 				return super(ActiveMqQueueSizeSummary, self).ok(results)
 
