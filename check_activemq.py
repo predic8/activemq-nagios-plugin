@@ -16,24 +16,24 @@ PREFIX = 'org.apache.activemq:'
 
 def make_url(args, dest):
 	return (
-		(args.jolokia_url + ('' if args.jolokia_url[-1]=='/' else '/') + dest)
+		(args.jolokia_url + ('' if args.jolokia_url[-1] == '/' else '/') + dest)
 		if args.jolokia_url
 		else ('http://'+args.user+':'+args.pwd
 			+'@'+args.host+':'+str(args.port)
 			+'/'+args.url_tail+'/'+dest)
 	)
 
-def query_url(args):
-	return make_url(args, PREFIX + 'type=Broker,brokerName=localhost')
+def query_url(args, dest=''):
+	return make_url(args, PREFIX + 'type=Broker,brokerName=localhost'+dest)
 
 def queue_url(args, queue):
-	return make_url(args, PREFIX + 'type=Broker,brokerName=localhost,destinationType=Queue,destinationName='+queue)
+	return query_url(args, ',destinationType=Queue,destinationName='+queue)
 
 def topic_url(args, topic):
-	return make_url(args, PREFIX + 'type=Broker,brokerName=localhost,destinationType=Topic,destinationName='+topic)
+	return query_url(args, ',destinationType=Topic,destinationName='+topic)
 
 def health_url(args):
-	return make_url(args, PREFIX + 'type=Broker,brokerName=localhost,service=Health')
+	return query_url(args, ',service=Health')
 
 
 
@@ -63,19 +63,21 @@ def queuesize(args):
 						qJ = json.loads(jsn.read())['value']
 						if qJ['Name'].startswith('ActiveMQ'):
 							continue # skip internal ActiveMQ queues
-						if self.pattern and fnmatch.fnmatch(qJ['Name'], self.pattern) or not self.pattern:
+						if (self.pattern
+								and fnmatch.fnmatch(qJ['Name'], self.pattern)
+								or not self.pattern):
 							yield np.Metric('Queue Size of %s' % qJ['Name'],
 														qJ['QueueSize'], min=0,
 														context='size')
 			except IOError as e:
 				#_log.error('Network fetching FAILED. ' + str(e))
-				yield np.Metric('Network fetching FAILED.', -1, context='size')
+				yield np.Metric('Network fetching FAILED: ' + e, -1, context='size')
 			except ValueError as e:
 				#_log.error('Decoding Json FAILED. ' + str(e))
-				yield np.Metric('Decoding Json FAILED.', -1, context='size')
+				yield np.Metric('Decoding Json FAILED: ' + e, -1, context='size')
 			except KeyError as e:
 				#_log.error('Loading Queue(s) FAILED. ' + str(e))
-				yield np.Metric('Getting Queue(s) FAILED.', -1, context='size')
+				yield np.Metric('Getting Queue(s) FAILED: ' + e, -1, context='size')
 
 	class ActiveMqQueueSizeSummary(np.Summary):
 		def ok(self, results):
@@ -84,14 +86,15 @@ def queuesize(args):
 				minQ = str(min(results, key=lambda r: r.metric.value).metric.value)
 				avgQ = str(sum([r.metric.value for r in results]) / len(results))
 				maxQ = str(max(results, key=lambda r: r.metric.value).metric.value)
-				return 'Checked ' + lenQ + ' queues with lengths min/avg/max = ' + '/'.join([minQ,avgQ,maxQ])
+				return ('Checked ' + lenQ + ' queues with lengths min/avg/max = '
+						+ '/'.join([minQ, avgQ, maxQ]))
 			else:
 				return super(ActiveMqQueueSizeSummary, self).ok(results)
 
 	if args.queue:
 		check = np.Check(
 				ActiveMqQueueSize(args.queue), ## check ONE queue (or glob)
-				ActiveMqScalarContext('size', args.warn, args.crit),
+				ActiveMqQueueSizeScalarContext('size', args.warn, args.crit),
 				ActiveMqQueueSizeSummary()
 			)
 		check.main()
@@ -126,11 +129,11 @@ def health(args):
 				status = resp['value']['CurrentStatus']
 				return np.Metric('CurrentStatus', status, context='health')
 			except IOError as e:
-				return np.Metric('Network fetching FAILED.', -1, context='health')
+				return np.Metric('Network fetching FAILED: ' + e, -1, context='health')
 			except ValueError as e:
-				return np.Metric('Decoding Json FAILED.', -1, context='health')
+				return np.Metric('Decoding Json FAILED: ' + e, -1, context='health')
 			except KeyError as e:
-				return np.Metric('Getting Values FAILED.', -1, context='health')
+				return np.Metric('Getting Values FAILED: ' + e, -1, context='health')
 
 	check = np.Check(
 			ActiveMqHealth(), ## check ONE queue
@@ -180,15 +183,15 @@ def subscriber(args):
 					return any(map(correct_clientId, vals))
 
 				# check if clientId is among the subscribers
-				is_sub = any(map(lambda s: client_is_subscriber(args.clientId, s), subs))
+				is_sub = any([client_is_subscriber(args.clientId, s) for s in subs])
 				return np.Metric('subscription', is_sub, context='subscriber')
 
 			except IOError as e:
-				return np.Metric('Network fetching FAILED.', -1, context='subscriber')
+				return np.Metric('Network fetching FAILED: ' + e, -1, context='subscriber')
 			except ValueError as e:
-				return np.Metric('Decoding Json FAILED.', -1, context='subscriber')
+				return np.Metric('Decoding Json FAILED: ' + e, -1, context='subscriber')
 			except KeyError as e:
-				return np.Metric('Getting Values FAILED.', -1, context='subscriber')
+				return np.Metric('Getting Values FAILED: ' + e, -1, context='subscriber')
 
 	check = np.Check(
 			ActiveMqSubscriber(), ## check ONE queue
@@ -204,7 +207,7 @@ def subscriber(args):
 def main():
 
 	# Top-level Argument Parser & Subparsers Initialization
-	parser = argparse.ArgumentParser(description = __doc__)
+	parser = argparse.ArgumentParser(description=__doc__)
 	connection = parser.add_argument_group('Connection')
 	connection.add_argument('--host', default='localhost',
 			help='ActiveMQ Server Hostname (default: %(default)s)')
@@ -219,7 +222,7 @@ def main():
 					(Default: "http://USER:PWD@HOST:PORT/URLTAIL/").
 					The parameters --user, --pwd, --host and --port are IGNORED
 					if this paramter is specified!
-					Please be carful when setting this directly as this is not really checked.''')
+					Please set this parameter carefully as it is not validated.''')
 
 	credentials = parser.add_argument_group('Credentials')
 	credentials.add_argument('-u', '--user', default='admin',
@@ -234,9 +237,11 @@ def main():
 			        or more queues on the ActiveMQ server.
 			        You can specify a queue name to check (even a pattern);
 			        see description of the 'queue' paramter for details.""")
-	parser_queuesize.add_argument('-w', '--warn', metavar='WARN', type=int, default=10,
+	parser_queuesize.add_argument('-w', '--warn',
+			metavar='WARN', type=int, default=10,
 			help='Warning if Queue Size is greater. (default: %(default)s)')
-	parser_queuesize.add_argument('-c', '--crit', metavar='CRIT', type=int, default=100,
+	parser_queuesize.add_argument('-c', '--crit',
+			metavar='CRIT', type=int, default=100,
 			help='Critical if Queue Size is greater. (default: %(default)s)')
 	parser_queuesize.add_argument('queue', nargs='?',
 			help='''Name of the Queue that will be checked.
