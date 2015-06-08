@@ -40,7 +40,11 @@ It can be installed via ```pip``` with the command ```pip install nagionsplugin`
  - This mode returns Critical if the given Topic does not exist.
 
 ## Examples
-- Check the queue size of the queue TEST: ```./check_activemq.py queuesize TEST```
-- Check the queue sizes of all queues starting with TEST: ```./check_activemq.py queuesize "TEST*"```
-- Check the overall Health of the ActiveMQ Broker: ```./check_activemq.py health```
-- Check that ```Spongebob``` is a subscriber of ```BikiniBottom```: ```./check_activemq.py --clientId Spongebob --topic BikiniBottom```
+- Check the queue size of the queue TEST
+ - ```./check_activemq.py queuesize TEST```
+- Check the queue sizes of all queues starting with TEST
+ - ```./check_activemq.py queuesize "TEST*"```
+- Check the overall Health of the ActiveMQ Broker
+ - ```./check_activemq.py health```
+- Check that ```Spongebob``` is a subscriber of ```BikiniBottom```
+ - ```./check_activemq.py --clientId Spongebob --topic BikiniBottom```
