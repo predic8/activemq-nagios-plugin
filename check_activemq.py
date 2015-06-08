@@ -15,9 +15,13 @@ import nagiosplugin as np
 PREFIX = 'org.apache.activemq:'
 
 def make_url(args, dest):
-	return ('http://'+args.user+':'+args.pwd
+	return (
+		(args.jolokia_url + ('' if args.jolokia_url[-1]=='/' else '/') + dest)
+		if args.jolokia_url
+		else ('http://'+args.user+':'+args.pwd
 			+'@'+args.host+':'+str(args.port)
-			+'/'+args.jolokia+'/'+dest)
+			+'/'+args.url_tail+'/'+dest)
+	)
 
 def query_url(args):
 	return make_url(args, PREFIX + 'type=Broker,brokerName=localhost')
@@ -206,15 +210,22 @@ def main():
 			help='ActiveMQ Server Hostname (default: %(default)s)')
 	connection.add_argument('--port', type=int, default=8161,
 			help='ActiveMQ Server Port (default: %(default)s)')
+	connection.add_argument('--url-tail',
+			default='api/jolokia/read',
+			#default='hawtio/jolokia/read',
+			help='Jolokia URL tail part. (default: %(default)s)')
+	connection.add_argument('-j', '--jolokia-url',
+			help='''Override complete Jolokia URL.
+					(Default: "http://USER:PWD@HOST:PORT/URLTAIL/").
+					The parameters --user, --pwd, --host and --port are IGNORED
+					if this paramter is specified!
+					Please be carful when setting this directly as this is not really checked.''')
+
 	credentials = parser.add_argument_group('Credentials')
 	credentials.add_argument('-u', '--user', default='admin',
 			help='Username for ActiveMQ admin account. (default: %(default)s)')
 	credentials.add_argument('-p', '--pwd', default='admin',
 			help='Password for ActiveMQ admin account. (default: %(default)s)')
-	parser.add_argument('-j', '--jolokia',
-			#default='api/jolokia/read',
-			default='hawtio/jolokia/read',
-			help='Jolokia URL part. (default: %(default)s)')
 	subparsers = parser.add_subparsers()
 
 	# Sub-Parser for queuesize
@@ -258,5 +269,3 @@ def main():
 
 if __name__ == '__main__':
 	main()
-
-
