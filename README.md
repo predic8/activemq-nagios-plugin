@@ -8,12 +8,18 @@ It can be configured through various command line parameters and has 3 different
 - Python 2.7
 - nagiosplugin 1.2.2
 
-nagionsplugin is a Python Framework designed for Nagios Plugins written in Python.
-It can be installed via ```pip``` with the command ```pip install nagionsplugin```.
+nagiosplugin is a Python Framework designed for Nagios Plugins written in Python.
+It can be installed via ```pip```.
 
 ## Installation
 
-[TODO]
+- A working Nagios Installation is required.
+- Change directory to the folder where your nagios plugins are stored.
+- Download script:
+ - ```wget https://raw.githubusercontent.com/predic8/activemq-nagios-plugin/master/check_activemq.py```
+- Install nagiosplugin for Python:
+ - ```pip install nagiosplugin``` (systemwide, execute as root)
+ - ```pip install --user nagiosplugin``` (for the current user)
 
 ## Command line options:
 - Run ```./check_activemq.py -h``` to see the full (and up to date) help
