@@ -71,13 +71,13 @@ def queuesize(args):
 														context='size')
 			except IOError as e:
 				#_log.error('Network fetching FAILED. ' + str(e))
-				yield np.Metric('Network fetching FAILED: ' + e, -1, context='size')
+				yield np.Metric('Network fetching FAILED: ' + str(e), -1, context='size')
 			except ValueError as e:
 				#_log.error('Decoding Json FAILED. ' + str(e))
-				yield np.Metric('Decoding Json FAILED: ' + e, -1, context='size')
+				yield np.Metric('Decoding Json FAILED: ' + str(e), -1, context='size')
 			except KeyError as e:
 				#_log.error('Loading Queue(s) FAILED. ' + str(e))
-				yield np.Metric('Getting Queue(s) FAILED: ' + e, -1, context='size')
+				yield np.Metric('Getting Queue(s) FAILED: ' + str(e), -1, context='size')
 
 	class ActiveMqQueueSizeSummary(np.Summary):
 		def ok(self, results):
@@ -129,11 +129,11 @@ def health(args):
 				status = resp['value']['CurrentStatus']
 				return np.Metric('CurrentStatus', status, context='health')
 			except IOError as e:
-				return np.Metric('Network fetching FAILED: ' + e, -1, context='health')
+				return np.Metric('Network fetching FAILED: ' + str(e), -1, context='health')
 			except ValueError as e:
-				return np.Metric('Decoding Json FAILED: ' + e, -1, context='health')
+				return np.Metric('Decoding Json FAILED: ' + str(e), -1, context='health')
 			except KeyError as e:
-				return np.Metric('Getting Values FAILED: ' + e, -1, context='health')
+				return np.Metric('Getting Values FAILED: ' + str(e), -1, context='health')
 
 	check = np.Check(
 			ActiveMqHealth(), ## check ONE queue
@@ -146,22 +146,38 @@ def health(args):
 
 
 def subscriber(args):
+	""" In the subscriber module we have several error codes that are used internally.
+	    -1   Miscellaneous Error (network, json, key value)
+	    -2   Topic Name is invalid / doesn't exist
+	    -3   Client ID is invalid / doesn't exist
+	    True/False aren't error codes, but the result whether clientId is an
+	    active subscriber of topic.
+	"""
 
 	class ActiveMqSubscriberContext(np.Context):
 
 		def evaluate(self, metric, resource):
-			if metric.value == None:
+			if metric.value == -1: # Miscellaneous Error
 				return self.result_cls(np.Critical, metric=metric)
-			else:
-				if metric.value:
-					return self.result_cls(np.Ok, metric=metric)
-				else:
-					return self.result_cls(np.Warn, metric=metric)
+			elif metric.value == -2: # Topic doesn't exist
+				return self.result_cls(np.Critical, metric=metric)
+			elif metric.value == -3: # Client invalid
+				return self.result_cls(np.Critical, metric=metric)
+			elif metric.value == True:
+				return self.result_cls(np.Ok, metric=metric)
+			elif metric.value == False:
+				return self.result_cls(np.Warn, metric=metric)
+			else: ###
+				return self.result_cls(np.Critical, metric=metric)
 		def describe(self, metric):
-			if metric.value == None:
-				return 'Topic ' + args.topic + ' DOES NOT EXIST'
-			return ('Client ' + args.clientId + ' is'
-				    +(''if metric.value else ' NOT a')
+			if metric.value == -1:
+				return 'ERROR: ' + metric.name
+			elif metric.value == -2:
+				return 'Topic ' + args.topic + ' IS INVALID / DOES NOT EXIST'
+			elif metric.value == -3:
+				return 'Subscriber ID ' + args.clientId + ' IS INVALID / DOES NOT EXIST'
+			return ('Client ' + args.clientId + ' is an '
+			        +('active'if metric.value==True else 'INACTIVE')
 			        +' subscriber of Topic ' + args.topic)
 
 	class ActiveMqSubscriber(np.Resource):
@@ -171,30 +187,43 @@ def subscriber(args):
 				resp = json.loads(jsn.read()) # parse JSON
 
 				if resp['status'] != 200: # None -> Topic doesn't exist
-					return np.Metric('subscription', None, context='subscriber')
+					return np.Metric('subscription', -2, context='subscriber')
 
 				subs = resp['value']['Subscriptions'] # Subscriptions for Topic
 
-				def client_is_subscriber(clientId, subscription):
-					vals = subscription['objectName'].split(',')
-					correct_clientId = (lambda v:
-										v.startswith('clientId=')
-										and v.endswith('='+clientId))
-					return any(map(correct_clientId, vals))
+				def client_is_active_subscriber(clientId, subscription):
+					subUrl = make_url(args, subscription['objectName'])
+					jsn = urllib.urlopen(subUrl) # get the subscription
+					subResp = json.loads(jsn.read()) # parse JSON
+
+					if subResp['value']['DestinationName'] != args.topic: # should always hold
+						return -2 # Topic is invalid / doesn't exist
+					if subResp['value']['ClientId'] != args.clientId: # subscriber ID check
+						return -3 # clientId
+					return subResp['value']['Active'] # subscribtion active?
 
 				# check if clientId is among the subscribers
-				is_sub = any([client_is_subscriber(args.clientId, s) for s in subs])
-				return np.Metric('subscription', is_sub, context='subscriber')
+				analyze = [client_is_active_subscriber(args.clientId, s) for s in subs]
+				if -2 in analyze:
+					return np.Metric('subscription', -2, context='subscriber')
+				if -3 in analyze:
+					return np.Metric('subscription', -3, context='subscriber')
+				else:
+					is_sub = any(analyze)
+					return np.Metric('subscription', is_sub, context='subscriber')
 
 			except IOError as e:
-				return np.Metric('Network fetching FAILED: ' + e, -1, context='subscriber')
+				print 'io'
+				return np.Metric('Network fetching FAILED: ' + str(e), -1, context='subscriber')
 			except ValueError as e:
-				return np.Metric('Decoding Json FAILED: ' + e, -1, context='subscriber')
+				print 'val'
+				return np.Metric('Decoding Json FAILED: ' + str(e), -1, context='subscriber')
 			except KeyError as e:
-				return np.Metric('Getting Values FAILED: ' + e, -1, context='subscriber')
+				print 'key'
+				return np.Metric('Getting Values FAILED: ' + str(e), -1, context='subscriber')
 
 	check = np.Check(
-			ActiveMqSubscriber(), ## check ONE queue
+			ActiveMqSubscriber(),
 			ActiveMqSubscriberContext('subscriber')
 		)
 	check.main()
