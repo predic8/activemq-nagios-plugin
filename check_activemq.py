@@ -221,13 +221,14 @@ def subscriber(args):
 				analyze = [client_is_active_subscriber(args.clientId, s) for s in subs]
 				if not analyze:
 					return np.Metric('subscription', -3, context='subscriber')
-				if -2 in analyze:
+				if -2 in analyze: # should never occur, just for safety
 					return np.Metric('subscription', -2, context='subscriber')
-				if -4 in analyze:
+				elif True in analyze: # active subscriber
+					return np.Metric('subscription', True, context='subscriber')
+				elif False in analyze: # INACTIVE subscriber
+					return np.Metric('subscription', False, context='subscriber')
+				elif -4 in analyze: # all clients failed
 					return np.Metric('subscription', -4, context='subscriber')
-				else:
-					is_sub = any(analyze)
-					return np.Metric('subscription', is_sub, context='subscriber')
 
 			except IOError as e:
 				return np.Metric('Network fetching FAILED: ' + str(e), -1, context='subscriber')
