@@ -43,10 +43,10 @@ def query_url(args, dest=''):
 	return make_url(args, PREFIX + 'type=Broker,brokerName=localhost'+dest)
 
 def queue_url(args, queue):
-	return query_url(args, ',destinationType=Queue,destinationName='+queue)
+	return query_url(args, ',destinationType=Queue,destinationName='+urllib.quote_plus(queue))
 
 def topic_url(args, topic):
-	return query_url(args, ',destinationType=Topic,destinationName='+topic)
+	return query_url(args, ',destinationType=Topic,destinationName='+urllib.quote_plus(topic))
 
 def health_url(args):
 	return query_url(args, ',service=Health')
@@ -57,15 +57,15 @@ def health_url(args):
 
 def queuesize(args):
 
-	class ActiveMqQueueSizeScalarContext(np.ScalarContext):
+	class ActiveMqQueueSizeContext(np.ScalarContext):
 		def evaluate(self, metric, resource):
 			if metric.value < 0:
-				return self.result_cls(np.Critical, "FAIL", metric)
-			return super(ActiveMqQueueSizeScalarContext, self).evaluate(metric, resource)
+				return self.result_cls(np.Critical, hint="FAIL", metric=metric)
+			return super(ActiveMqQueueSizeContext, self).evaluate(metric, resource)
 		def describe(self, metric):
 			if metric.value < 0:
 				return metric.name
-			return super(ActiveMqQueueSizeScalarContext, self).describe(metric)
+			return super(ActiveMqQueueSizeContext, self).describe(metric)
 
 	class ActiveMqQueueSize(np.Resource):
 		def __init__(self, pattern=None):
@@ -86,13 +86,10 @@ def queuesize(args):
 														qJ['QueueSize'], min=0,
 														context='size')
 			except IOError as e:
-				#_log.error('Network fetching FAILED. ' + str(e))
 				yield np.Metric('Network fetching FAILED: ' + str(e), -1, context='size')
 			except ValueError as e:
-				#_log.error('Decoding Json FAILED. ' + str(e))
 				yield np.Metric('Decoding Json FAILED: ' + str(e), -1, context='size')
 			except KeyError as e:
-				#_log.error('Loading Queue(s) FAILED. ' + str(e))
 				yield np.Metric('Getting Queue(s) FAILED: ' + str(e), -1, context='size')
 
 	class ActiveMqQueueSizeSummary(np.Summary):
@@ -110,14 +107,14 @@ def queuesize(args):
 	if args.queue:
 		check = np.Check(
 				ActiveMqQueueSize(args.queue), ## check ONE queue (or glob)
-				ActiveMqQueueSizeScalarContext('size', args.warn, args.crit),
+				ActiveMqQueueSizeContext('size', args.warn, args.crit),
 				ActiveMqQueueSizeSummary()
 			)
 		check.main()
 	else:
 		check = np.Check(
 				ActiveMqQueueSize(), # check ALL queues
-				ActiveMqQueueSizeScalarContext('size', args.warn, args.crit),
+				ActiveMqQueueSizeContext('size', args.warn, args.crit),
 				ActiveMqQueueSizeSummary()
 			)
 		check.main()
@@ -229,18 +226,66 @@ def subscriber(args):
 					return np.Metric('subscription', is_sub, context='subscriber')
 
 			except IOError as e:
-				print 'io'
 				return np.Metric('Network fetching FAILED: ' + str(e), -1, context='subscriber')
 			except ValueError as e:
-				print 'val'
 				return np.Metric('Decoding Json FAILED: ' + str(e), -1, context='subscriber')
 			except KeyError as e:
-				print 'key'
 				return np.Metric('Getting Values FAILED: ' + str(e), -1, context='subscriber')
 
 	check = np.Check(
 			ActiveMqSubscriber(),
 			ActiveMqSubscriberContext('subscriber')
+		)
+	check.main()
+
+
+
+
+
+def exists(args):
+
+	class ActiveMqExistsContext(np.Context):
+		def evaluate(self, metric, resource):
+			if metric.value > 0:
+				return self.result_cls(np.Ok, metric=metric)
+			return self.result_cls(np.Critical, metric=metric)
+		def describe(self, metric):
+			if metric.value == 0:
+				return 'Neither Queue nor Topic with name ' + args.name + ' were found!'
+			if metric.value == 1:
+				return 'Found Queue with name ' + args.name
+			if metric.value == 2:
+				return 'Found Topic with name ' + args.name
+			return super(ActiveMqExistsScalarContext, self).describe(metric)
+
+	class ActiveMqExists(np.Resource):
+		def probe(self):
+			try:
+				jsnQ = urllib.urlopen(queue_url(args, args.name))
+				respQ = json.loads(jsnQ.read())
+				if respQ['status'] == 200:
+					return np.Metric('exists', 1, context='exists')
+
+				jsnT = urllib.urlopen(topic_url(args, args.name))
+				respT = json.loads(jsnT.read())
+				if respT['status'] == 200:
+					return np.Metric('exists', 2, context='exists')
+
+				return np.Metric('exists', 0, context='exists')
+
+			except IOError as e:
+				#_log.error('Network fetching FAILED. ' + str(e))
+				return np.Metric('Network fetching FAILED: ' + str(e), -1, context='exists')
+			except ValueError as e:
+				#_log.error('Decoding Json FAILED. ' + str(e))
+				return np.Metric('Decoding Json FAILED: ' + str(e), -1, context='exists')
+			except KeyError as e:
+				#_log.error('Loading Queue(s) FAILED. ' + str(e))
+				return np.Metric('Getting Queue(s) FAILED: ' + str(e), -1, context='exists')
+
+	check = np.Check(
+				ActiveMqExists(),
+				ActiveMqExistsContext('exists')
 		)
 	check.main()
 
@@ -311,6 +356,16 @@ def main():
 	parser_subscriber.add_argument('--topic', required=True,
 			help='Name of the Topic that will be checked.')
 	parser_subscriber.set_defaults(func=subscriber)
+
+	# Sub-Parser for exists
+	parser_exists = subparsers.add_parser('exists',
+			help="""Check Exists: This mode checks if a Queue or Topic with the
+			        given name exists.
+			        If either a Queue or a Topic with this name exist,
+					this mode yields OK.""")
+	parser_exists.add_argument('--name', required=True,
+			help='Name of the Queue or Topic that will be checked.')
+	parser_exists.set_defaults(func=exists)
 
 	# Evaluate Arguments
 	args = parser.parse_args()
