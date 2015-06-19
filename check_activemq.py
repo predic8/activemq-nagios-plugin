@@ -24,7 +24,7 @@ import nagiosplugin as np
 
 """Check the size of a given ActiveMQ Queue."""
 
-PLUGIN_VERSION = 0.4
+PLUGIN_VERSION = "0.4.1"
 
 PREFIX = 'org.apache.activemq:'
 
@@ -58,11 +58,11 @@ def queuesize(args):
 	class ActiveMqQueueSizeContext(np.ScalarContext):
 		def evaluate(self, metric, resource):
 			if metric.value < 0:
-				return self.result_cls(np.Critical, hint="FAIL", metric=metric)
+				return self.result_cls(np.Unknown, metric=metric)
 			return super(ActiveMqQueueSizeContext, self).evaluate(metric, resource)
 		def describe(self, metric):
 			if metric.value < 0:
-				return metric.name
+				return 'ERROR: ' + metric.name
 			return super(ActiveMqQueueSizeContext, self).describe(metric)
 
 	class ActiveMqQueueSize(np.Resource):
@@ -84,7 +84,7 @@ def queuesize(args):
 														qJ['QueueSize'], min=0,
 														context='size')
 			except IOError as e:
-				yield np.Metric('Network fetching FAILED: ' + str(e), -1, context='size')
+				yield np.Metric('Fetching network FAILED: ' + str(e), -1, context='size')
 			except ValueError as e:
 				yield np.Metric('Decoding Json FAILED: ' + str(e), -1, context='size')
 			except KeyError as e:
@@ -125,12 +125,16 @@ def health(args):
 
 	class ActiveMqHealthContext(np.Context):
 		def evaluate(self, metric, resource):
+			if metric.value < 0:
+				return self.result_cls(np.Unknown, metric=metric)
 			if metric.value == "Good":
 				return self.result_cls(np.Ok, metric=metric)
 			else:
 				return self.result_cls(np.Warn, metric=metric)
 		def describe(self, metric):
-			return str(metric.value)
+			if metric.value < 0:
+				return 'ERROR: ' + metric.name
+			return metric.name + ' ' + metric.value
 
 	class ActiveMqHealth(np.Resource):
 		def probe(self):
@@ -140,7 +144,7 @@ def health(args):
 				status = resp['value']['CurrentStatus']
 				return np.Metric('CurrentStatus', status, context='health')
 			except IOError as e:
-				return np.Metric('Network fetching FAILED: ' + str(e), -1, context='health')
+				return np.Metric('Fetching network FAILED: ' + str(e), -1, context='health')
 			except ValueError as e:
 				return np.Metric('Decoding Json FAILED: ' + str(e), -1, context='health')
 			except KeyError as e:
@@ -168,8 +172,8 @@ def subscriber(args):
 
 	class ActiveMqSubscriberContext(np.Context):
 		def evaluate(self, metric, resource):
-			if metric.value == -1: # Miscellaneous Error
-				return self.result_cls(np.Critical, metric=metric)
+			if metric.value == -1: # Network or JSON Error
+				return self.result_cls(np.Unknown, metric=metric)
 			elif metric.value == -2: # Topic doesn't exist
 				return self.result_cls(np.Critical, metric=metric)
 			elif metric.value == -3: # Topic has no subscribers
@@ -231,7 +235,7 @@ def subscriber(args):
 					return np.Metric('subscription', -4, context='subscriber')
 
 			except IOError as e:
-				return np.Metric('Network fetching FAILED: ' + str(e), -1, context='subscriber')
+				return np.Metric('Fetching network FAILED: ' + str(e), -1, context='subscriber')
 			except ValueError as e:
 				return np.Metric('Decoding Json FAILED: ' + str(e), -1, context='subscriber')
 			except KeyError as e:
@@ -251,10 +255,14 @@ def exists(args):
 
 	class ActiveMqExistsContext(np.Context):
 		def evaluate(self, metric, resource):
+			if metric.value < 0:
+				return self.result_cls(np.Unknown, metric=metric)
 			if metric.value > 0:
 				return self.result_cls(np.Ok, metric=metric)
 			return self.result_cls(np.Critical, metric=metric)
 		def describe(self, metric):
+			if metric.value < 0:
+				return 'ERROR: ' + metric.name
 			if metric.value == 0:
 				return 'Neither Queue nor Topic with name ' + args.name + ' were found!'
 			if metric.value == 1:
