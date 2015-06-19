@@ -1,31 +1,37 @@
 # ActiveMQ Nagios Plugin
-## Monitor Apache ActiveMQ's health, queuesizes and subscribers
-
-This is a Nagios Plugin for monitoring ActiveMQ message brokers. The plugin is written in Python.
-It can be configured through various command line parameters and has 4 different modes.
+Monitor Apache ActiveMQ's health, queuesizes and subscribers. The plugin makes use of the Jolokia REST interface.
 
 ## Requirements (tested with):
+- ActiveMQ starting from version 5.8 
 - Python 2.7
 - nagiosplugin 1.2.2
+
+## Supported ActiveMQ Versions
+The plugin queries ActiveMQ using the new REST based Jolokia (Link) interface.
+
+### ActiveMQ < 5.8
+To use this plugin with an ActiveMQ version earlier than 5.8 you can add jolokia support manually to the broker.
+
+### ActiveMQ 5.9.!!!
 
 nagiosplugin is a Python Framework designed for Nagios Plugins written in Python.
 It can be installed via ```pip```.
 
 ## Installation
 
-- A working Nagios Installation is required.
-- Change directory to the folder where your nagios plugins are stored.
-- Download script:
+1. Navigate to the folder where your nagios plugins are stored e.g.:
+ -```cd /usr/lib/nagios/plugins/```
+- Download the plugin script:
  - ```wget https://raw.githubusercontent.com/predic8/activemq-nagios-plugin/master/check_activemq.py```
 - Install nagiosplugin for Python:
- - ```pip install nagiosplugin``` (systemwide, execute as root)
+ - ```pip install nagiosplugin``` (systemwide, execute as root) or
  - ```pip install --user nagiosplugin``` (for the current user)
 
 ## Command line options:
 - Run ```./check_activemq.py -h``` to see the full (and up to date) help
-- ```--host``` specifies the Hostname
+- ```--host``` specifies the Hostname of the ActiveMQ broker
 - ```--port``` specifies the Port
-- ```--user``` specifies the Username
+- ```--user``` specifies the Username of ActiveMQ's Web Console 
 - ```--pwd``` specifies the Password
 
 ## Operation Modes
