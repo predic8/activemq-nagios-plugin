@@ -1,5 +1,5 @@
-# activemq-nagios-plugin
-Nagios Plugins for Monitoring the Apache ActiveMQ Broker.
+# ActiveMQ Nagios Plugin
+## Monitor Apache ActiveMQ's health, queuesizes and subscribers
 
 This is a Nagios Plugin for monitoring ActiveMQ message brokers. The plugin is written in Python.
 It can be configured through various command line parameters and has 4 different modes.
