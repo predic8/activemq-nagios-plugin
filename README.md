@@ -17,7 +17,7 @@ To use this plugin with an ActiveMQ version earlier than 5.8 you have too add Jo
 
 ### ActiveMQ < 5.9.1
 With version 5.9.1 of ActiveMQ, the Hawtio console was removed.
-If you run a version of version of ActiveMQ that still includes Hawtio,
+If you run a version of ActiveMQ that still includes Hawtio,
 you need to supply the ```--url-tail "hawtio/jolokia/read"``` parameter to the plugin.
 
 For releases without Hawtio, this paramter can be omitted and defaults to ```api/jolokia/read```.
@@ -25,7 +25,7 @@ For releases without Hawtio, this paramter can be omitted and defaults to ```api
 ## Installation
 
 1. Navigate to the folder where your nagios plugins are stored e.g.:
- -```cd /usr/lib/nagios/plugins/```
+ - ```cd /usr/lib/nagios/plugins/```
 - Download the plugin script:
  - ```wget https://raw.githubusercontent.com/predic8/activemq-nagios-plugin/master/check_activemq.py```
 - Install nagiosplugin for Python:
@@ -39,36 +39,38 @@ For releases without Hawtio, this paramter can be omitted and defaults to ```api
 - ```--user``` specifies the Username of ActiveMQ's Web Console 
 - ```--pwd``` specifies the Password
 
-## Operation Modes
+## Checks
 
-All modes return UNKNOWN if the broker isn't reachable on the network.
+This Plugin currently support 4 different checks listed below.
+All checks return UNKNOWN if the broker isn't reachable on the network.
 
-#### queuesize - check the size of one or more Queues
+#### queuesize
+- Check the size of one or more Queues
 - Additional parameters:
  - ```-w WARN``` specifies the Warning threshold (default 10)
  - ```-c CRIT``` specifies the Critical threshold (default 100)
  - ```QUEUE``` - specify queue name to check (see additional explanations below)
-- If queuesize is called with NO queue paramter then ALL queues are checkes (excluding queues whose name start with 'ActiveMQ')
+- If queuesize is called with NO queue paramter then ALL queues are checked (excluding queues whose name start with 'ActiveMQ')
 - If queuesize is called WITH a queue then this explicit queue name is checked
  - A given queue name can also contain shell-like wildcards like ```*``` and ```?```
 
-#### health - check the overall Health of the broker
-- This mode just checks if the current status of the ```Health``` service is "Good"
+#### health
+- Checks the overall health of the broker
 - Returns OK or WARN
 
 #### subscriber
+- Checks if the specified clientId is a subscriber of the specified topic and raises a Warning if this isn't the case
 - Additional parameters:
  - ```--cliendId``` specifies a client ID
  - ```--topic``` specifies a topic of the ActiveMQ Broker
-- This mode checks if the specified clientId is a subscriber of the specified topic and raises a Warning if this isn't the case.
 - Returns CRITICAL if the given Topic does not exist / has no subscribers / the clientId is invalid
 - Returns WARN if the given clientId is an inactive Subscriber
 
 #### exists
+- Checks if a Queue or a Topic with the specified `name` exists
 - Additional parameters:
  - ```--name``` specifies a Queue or Topic name
-- This mode checks if a Queue or a Topic with the specified `name` exists.
-- This mode returns Critical if no Queue or Topic with the given `name` exist
+- Returns Critical if no Queue or Topic with the given `name` exist
 
 ## Examples
 - Check the queue size of the queue TEST
