@@ -43,10 +43,10 @@ def query_url(args, dest=''):
 	return make_url(args, PREFIX + 'type=Broker,brokerName=localhost'+dest)
 
 def queue_url(args, queue):
-	return query_url(args, ',destinationType=Queue,destinationName='+urllib.quote_plus(queue))
+	return query_url(args, ',destinationType=Queue,destinationName='+urllib.quote(queue))
 
 def topic_url(args, topic):
-	return query_url(args, ',destinationType=Topic,destinationName='+urllib.quote_plus(topic))
+	return query_url(args, ',destinationType=Topic,destinationName='+urllib.quote(topic))
 
 def health_url(args):
 	return query_url(args, ',service=Health')
@@ -159,22 +159,24 @@ def health(args):
 
 
 def subscriber(args):
-	""" In the subscriber module we have several error codes that are used internally.
+	""" In the subscriber module there are several error codes that are used internally.
 	    -1   Miscellaneous Error (network, json, key value)
 	    -2   Topic Name is invalid / doesn't exist
-	    -3   Client ID is invalid / doesn't exist
+	    -3   Topic has no Subscribers
+	    -4   Client ID is invalid / doesn't exist
 	    True/False aren't error codes, but the result whether clientId is an
 	    active subscriber of topic.
 	"""
 
 	class ActiveMqSubscriberContext(np.Context):
-
 		def evaluate(self, metric, resource):
 			if metric.value == -1: # Miscellaneous Error
 				return self.result_cls(np.Critical, metric=metric)
 			elif metric.value == -2: # Topic doesn't exist
 				return self.result_cls(np.Critical, metric=metric)
-			elif metric.value == -3: # Client invalid
+			elif metric.value == -3: # Topic has no subscribers
+				return self.result_cls(np.Critical, metric=metric)
+			elif metric.value == -4: # Client invalid
 				return self.result_cls(np.Critical, metric=metric)
 			elif metric.value == True:
 				return self.result_cls(np.Ok, metric=metric)
@@ -188,6 +190,8 @@ def subscriber(args):
 			elif metric.value == -2:
 				return 'Topic ' + args.topic + ' IS INVALID / DOES NOT EXIST'
 			elif metric.value == -3:
+				return 'Topic ' + args.topic + ' HAS NO SUBSCRIBERS'
+			elif metric.value == -4:
 				return 'Subscriber ID ' + args.clientId + ' IS INVALID / DOES NOT EXIST'
 			return ('Client ' + args.clientId + ' is an '
 			        +('active'if metric.value==True else 'INACTIVE')
@@ -205,22 +209,24 @@ def subscriber(args):
 				subs = resp['value']['Subscriptions'] # Subscriptions for Topic
 
 				def client_is_active_subscriber(clientId, subscription):
-					subUrl = make_url(args, subscription['objectName'])
+					subUrl = make_url(args, urllib.quote(subscription['objectName']))
 					jsn = urllib.urlopen(subUrl) # get the subscription
 					subResp = json.loads(jsn.read()) # parse JSON
 
 					if subResp['value']['DestinationName'] != args.topic: # should always hold
 						return -2 # Topic is invalid / doesn't exist
 					if subResp['value']['ClientId'] != args.clientId: # subscriber ID check
-						return -3 # clientId
+						return -4 # clientId invalid
 					return subResp['value']['Active'] # subscribtion active?
 
 				# check if clientId is among the subscribers
 				analyze = [client_is_active_subscriber(args.clientId, s) for s in subs]
+				if not analyze:
+					return np.Metric('subscription', -3, context='subscriber')
 				if -2 in analyze:
 					return np.Metric('subscription', -2, context='subscriber')
-				if -3 in analyze:
-					return np.Metric('subscription', -3, context='subscriber')
+				if -4 in analyze:
+					return np.Metric('subscription', -4, context='subscriber')
 				else:
 					is_sub = any(analyze)
 					return np.Metric('subscription', is_sub, context='subscriber')
@@ -274,13 +280,10 @@ def exists(args):
 				return np.Metric('exists', 0, context='exists')
 
 			except IOError as e:
-				#_log.error('Network fetching FAILED. ' + str(e))
 				return np.Metric('Network fetching FAILED: ' + str(e), -1, context='exists')
 			except ValueError as e:
-				#_log.error('Decoding Json FAILED. ' + str(e))
 				return np.Metric('Decoding Json FAILED: ' + str(e), -1, context='exists')
 			except KeyError as e:
-				#_log.error('Loading Queue(s) FAILED. ' + str(e))
 				return np.Metric('Getting Queue(s) FAILED: ' + str(e), -1, context='exists')
 
 	check = np.Check(
