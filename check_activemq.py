@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 *-*
 
-"""
-	Copyright 2015 predic8 GmbH, www.predic8.com
+""" Copyright 2015 predic8 GmbH, www.predic8.com
 
 	Licensed under the Apache License, Version 2.0 (the "License");
 	you may not use this file except in compliance with the License.
@@ -20,13 +19,12 @@
 import urllib
 import json
 import argparse
-#import logging
 import fnmatch
 import nagiosplugin as np
 
 """Check the size of a given ActiveMQ Queue."""
 
-#_log = logging.getLogger('nagiosplugin')
+PLUGIN_VERSION = 0.4
 
 PREFIX = 'org.apache.activemq:'
 
@@ -301,6 +299,12 @@ def main():
 
 	# Top-level Argument Parser & Subparsers Initialization
 	parser = argparse.ArgumentParser(description=__doc__)
+
+	parser.add_argument('-v', '--version', action='version',
+			help='Print version number',
+			version=( '%(prog)s version ' + str(PLUGIN_VERSION) )
+	)
+
 	connection = parser.add_argument_group('Connection')
 	connection.add_argument('--host', default='localhost',
 			help='ActiveMQ Server Hostname (default: %(default)s)')
@@ -322,6 +326,7 @@ def main():
 			help='Username for ActiveMQ admin account. (default: %(default)s)')
 	credentials.add_argument('-p', '--pwd', default='admin',
 			help='Password for ActiveMQ admin account. (default: %(default)s)')
+
 	subparsers = parser.add_subparsers()
 
 	# Sub-Parser for queuesize
