@@ -72,15 +72,15 @@ All checks return UNKNOWN if the broker isn't reachable on the network.
  - ```--name``` specifies a Queue or Topic name
 - Returns Critical if no Queue or Topic with the given `name` exist
 
-## Examples
-- Check the queue size of the queue TEST
+## Examples. Check
+- the queue size of the queue TEST
  - ```./check_activemq.py queuesize TEST```
-- Check the queue sizes of all queues starting with TEST
- - ```./check_activemq.py queuesize "TEST*"```
-- Check the overall Health of the ActiveMQ Broker
+- the queue sizes of all queues starting with TEST. 
+ - ```./check_activemq.py -w 30 -c 100 queuesize "TEST*"```
+- the overall health of the ActiveMQ Broker
  - ```./check_activemq.py health```
-- Check that ```Spongebob``` is a subscriber of ```BikiniBottom```
+- that ```Spongebob``` is a subscriber of ```BikiniBottom```
  - ```./check_activemq.py subscriber --clientId Spongebob --topic BikiniBottom```
-- Check if a Queue or a Topic with a given name exists
+- if a queue or a topic with a given name exists
  - ```./check_activemq.py exists --name someQueueName```
  - ```./check_activemq.py exists --name someTopicName```
