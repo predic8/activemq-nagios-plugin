@@ -48,6 +48,10 @@ def topic_url(args, topic):
 def health_url(args):
 	return query_url(args, ',service=Health')
 
+def loadJson(srcurl):
+	jsn = urllib.urlopen(srcurl)
+	return json.loads(jsn.read())
+
 
 
 
@@ -69,11 +73,8 @@ def queuesize(args):
 			self.pattern = pattern
 		def probe(self):
 			try:
-				jsn = urllib.urlopen(query_url(args))
-				resp = json.loads(jsn.read())
-				for queue in resp['value']['Queues']:
-						jsn = urllib.urlopen(make_url(args, queue['objectName']))
-						qJ = json.loads(jsn.read())['value']
+				for queue in loadJson(query_url(args))['value']['Queues']:
+						qJ = loadJson(make_url(args, queue['objectName']))['value']
 						if qJ['Name'].startswith('ActiveMQ'):
 							continue # skip internal ActiveMQ queues
 						if (self.pattern
@@ -138,9 +139,7 @@ def health(args):
 	class ActiveMqHealth(np.Resource):
 		def probe(self):
 			try:
-				jsn = urllib.urlopen(health_url(args))
-				resp = json.loads(jsn.read())
-				status = resp['value']['CurrentStatus']
+				status = loadJson(health_url(args))['value']['CurrentStatus']
 				return np.Metric('CurrentStatus', status, context='health')
 			except IOError as e:
 				return np.Metric('Fetching network FAILED: ' + str(e), -1, context='health')
@@ -201,8 +200,7 @@ def subscriber(args):
 	class ActiveMqSubscriber(np.Resource):
 		def probe(self):
 			try:
-				jsn = urllib.urlopen(topic_url(args, args.topic)) # get a Topic
-				resp = json.loads(jsn.read()) # parse JSON
+				resp = loadJson(topic_url(args, args.topic))
 
 				if resp['status'] != 200: # None -> Topic doesn't exist
 					return np.Metric('subscription', -2, context='subscriber')
@@ -210,9 +208,7 @@ def subscriber(args):
 				subs = resp['value']['Subscriptions'] # Subscriptions for Topic
 
 				def client_is_active_subscriber(clientId, subscription):
-					subUrl = make_url(args, urllib.quote(subscription['objectName']))
-					jsn = urllib.urlopen(subUrl) # get the subscription
-					subResp = json.loads(jsn.read()) # parse JSON
+					subResp = loadJson(make_url(args, urllib.quote(subscription['objectName']))) # get the subscription
 
 					if subResp['value']['DestinationName'] != args.topic: # should always hold
 						return -2 # Topic is invalid / doesn't exist
@@ -273,13 +269,11 @@ def exists(args):
 	class ActiveMqExists(np.Resource):
 		def probe(self):
 			try:
-				jsnQ = urllib.urlopen(queue_url(args, args.name))
-				respQ = json.loads(jsnQ.read())
+				respQ = loadJson(queue_url(args, args.name))
 				if respQ['status'] == 200:
 					return np.Metric('exists', 1, context='exists')
 
-				jsnT = urllib.urlopen(topic_url(args, args.name))
-				respT = json.loads(jsnT.read())
+				respT = loadJson(topic_url(args, args.name))
 				if respT['status'] == 200:
 					return np.Metric('exists', 2, context='exists')
 
