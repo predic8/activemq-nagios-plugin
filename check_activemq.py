@@ -315,17 +315,15 @@ def subscriber_pending(args):
 	class ActiveMqSubscriberPending(np.Resource):
 		def probe(self):
 			try:
-				jsn = urllib.urlopen(query_url(args))
-				resp = json.loads(jsn.read())
+				resp = loadJson(query_url(args))
 				for queue in ( resp['value']['TopicSubscribers'] + resp['value']['InactiveDurableTopicSubscribers'] ):
-					jsn = urllib.urlopen(make_url(args, queue['objectName']))
-					qJ = json.loads(jsn.read())['value']
+					qJ = loadJson(make_url(args, queue['objectName']))['value']
 					if not qJ['SubscriptionName'] == args.subscription:
 						continue # skip subscriber
 					if not qJ['ClientId'] == args.clientId:
 						# When this if is entered, we have found the correct
 						# subscription, but the cliendId doesn't match
-						return np.Metric('ClientId Error. Expected: %s. Got: %s' % (args.clientId, qJ['ClientId']),
+						return np.Metric('ClientId error: Expected: %s. Got: %s' % (args.clientId, qJ['ClientId']),
 						                  -1, context='subscriber_pending')
 					return np.Metric('Pending Messages for %s' % qJ['SubscriptionName'],
 					                 qJ['PendingQueueSize'], min=0,
