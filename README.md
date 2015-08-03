@@ -2,7 +2,7 @@
 Monitor Apache ActiveMQ's health, queuesizes and subscribers. The plugin makes use of the Jolokia REST interface.
 
 ## Requirements (tested with):
-- ActiveMQ starting from version 5.8 
+- ActiveMQ starting from version 5.8
 - Python 2.7
 - nagiosplugin 1.2.2
 
@@ -36,7 +36,7 @@ For releases without Hawtio, this paramter can be omitted and defaults to ```api
 - Run ```./check_activemq.py -h``` to see the full (and up to date) help
 - ```--host``` specifies the Hostname of the ActiveMQ broker
 - ```--port``` specifies the Port
-- ```--user``` specifies the Username of ActiveMQ's Web Console 
+- ```--user``` specifies the Username of ActiveMQ's Web Console
 - ```--pwd``` specifies the Password
 
 ## Checks
@@ -50,7 +50,7 @@ All checks return UNKNOWN if the broker isn't reachable on the network.
  - ```-w WARN``` specifies the Warning threshold (default 10)
  - ```-c CRIT``` specifies the Critical threshold (default 100)
  - ```QUEUE``` - specify queue name to check (see additional explanations below)
-- If queuesize is called with NO queue paramter then ALL queues are checked (excluding queues whose name start with 'ActiveMQ')
+- If queuesize is called with NO queue parameter then ALL queues are checked (excluding queues whose name start with 'ActiveMQ')
 - If queuesize is called WITH a queue then this explicit queue name is checked
  - A given queue name can also contain shell-like wildcards like ```*``` and ```?```
 
@@ -61,10 +61,10 @@ All checks return UNKNOWN if the broker isn't reachable on the network.
 #### subscriber
 - Checks if the specified clientId is a subscriber of the specified topic and raises a Warning if this isn't the case
 - Additional parameters:
- - ```--cliendId``` specifies a client ID
+ - ```--clientId``` specifies a client ID
  - ```--topic``` specifies a topic of the ActiveMQ Broker
 - Returns CRITICAL if the given Topic does not exist / has no subscribers / the clientId is invalid
-- Returns WARN if the given clientId is an inactive Subscriber
+- Returns WARN if the given `clientId` is an inactive Subscriber
 
 #### exists
 - Checks if a Queue or a Topic with the specified `name` exists
@@ -72,10 +72,17 @@ All checks return UNKNOWN if the broker isn't reachable on the network.
  - ```--name``` specifies a Queue or Topic name
 - Returns Critical if no Queue or Topic with the given `name` exist
 
+#### subscriber_pending
+- Checks the `Pending Queue Size` and the `clientId` for a given `subscription`
+- Additional parameters:
+ - ```--subscription``` specifies the name of a subscription
+ - ```--clientId``` specifies a client ID
+- Returns Critical if `clientId` is not the Client Id of the given subscription.
+
 ## Examples. Check
 - the queue size of the queue TEST
  - ```./check_activemq.py queuesize TEST```
-- the queue sizes of all queues starting with TEST. 
+- the queue sizes of all queues starting with TEST.
  - ```./check_activemq.py -w 30 -c 100 queuesize "TEST*"```
 - the overall health of the ActiveMQ Broker
  - ```./check_activemq.py health```

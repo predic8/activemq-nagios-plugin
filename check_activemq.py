@@ -23,7 +23,7 @@ import argparse
 import fnmatch
 import nagiosplugin as np
 
-PLUGIN_VERSION = "0.4.1"
+PLUGIN_VERSION = "0.5"
 
 PREFIX = 'org.apache.activemq:'
 
@@ -322,7 +322,7 @@ def subscriber_pending(args):
 						continue # skip subscriber
 					if not qJ['ClientId'] == args.clientId:
 						# When this if is entered, we have found the correct
-						# subscription, but the cliendId doesn't match
+						# subscription, but the clientId doesn't match
 						return np.Metric('ClientId error: Expected: %s. Got: %s' % (args.clientId, qJ['ClientId']),
 						                  -1, context='subscriber_pending')
 					return np.Metric('Pending Messages for %s' % qJ['SubscriptionName'],
@@ -428,8 +428,11 @@ def main():
 
 	# Sub-Parser for queuesize-subscriber
 	parser_subscriber_pending = subparsers.add_parser('subscriber-pending',
-				help="""Check Subscriber-Pending:
-				        This mode checks that the given subscriber doesn't have too many pending messages.""")
+			help="""Check Subscriber-Pending:
+			        This mode checks that the given subscriber doesn't have
+			        too many pending messages (specified with -w and -c)
+			        and that the given clientId the Id that is involved in
+			        the subscription.""")
 	parser_subscriber_pending.add_argument('--subscription', required=True,
 			help='Name of the subscription thath will be checked.')
 	parser_subscriber_pending.add_argument('--clientId', required=True,
