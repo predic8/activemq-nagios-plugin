@@ -296,6 +296,56 @@ def exists(args):
 
 
 
+def subriber_pending(args):
+	""" Mix from queuesize and subscriber check.
+	    Check that the given clientId is a subscriber of the given Topic.
+		Also check
+	"""
+
+	class ActiveMqSubscriberPendingContext(np.Context):
+		def evaluate(self, metric, resource):
+			if metric.value < 0:
+				return self.result_cls(np.Unknown, metric=metric)
+			return super(ActiveMqQueueSizeContext, self).evaluate(metric, resource)
+		def describe(self, metric):
+			if metric.value < 0:
+				return 'ERROR: ' + metric.name
+			return super(ActiveMqQueueSizeContext, self).describe(metric)
+
+	class ActiveMqSubscriberPending(np.Resource):
+		def probe(self):
+			try:
+				print query_url(args)
+				jsn = urllib.urlopen(query_url(args))
+				resp = json.loads(jsn.read())
+				for queue in ( resp['value']['TopicSubscribers'] + resp['value']['InactiveDurableTopicSubscribers'] ):
+					jsn = urllib.urlopen(make_url(args, queue['objectName']))
+					qJ = json.loads(jsn.read())['value']
+					if not qJ['SubscriptionName'] == args.subscription:
+						continue # skip subscriber
+					if (self.pattern
+							and fnmatch.fnmatch(qJ['Name'], self.pattern)
+							or not self.pattern):
+						yield np.Metric('Queue Size of %s' % qJ['Name'],
+													qJ['QueueSize'], min=0,
+													context='subriber_pending')
+			except IOError as e:
+				yield np.Metric('Fetching network FAILED: ' + str(e), -1, context='subriber_pending')
+			except ValueError as e:
+				yield np.Metric('Decoding Json FAILED: ' + str(e), -1, context='subriber_pending')
+			except KeyError as e:
+				yield np.Metric('Getting Queue(s) FAILED: ' + str(e), -1, context='subriber_pending')
+
+	check = np.Check(
+			ActiveMqSubscriberPending(args.queue),
+			ActiveMqSubscriberPendingContext('subriber_pending', args.warn, args.crit),
+		)
+	check.main()
+
+
+
+
+
 @np.guarded
 def main():
 
@@ -376,6 +426,16 @@ def main():
 	parser_exists.add_argument('--name', required=True,
 			help='Name of the Queue or Topic that will be checked.')
 	parser_exists.set_defaults(func=exists)
+
+	# Sub-Parser for queuesize-subscriber
+	parser_subscriber_pending = subparsers.add_parser('subscriber-pending',
+				help="""Check Subscriber-Pending:
+				        This mode checks that the given subscriber doesn't have too many pending messages.""")
+	parser_subscriber_pending.add_argument('--clientId', required=True,
+			help='Client ID of the client that will be checked')
+	parser_subscriber_pending.add_argument('--subscription', required=True,
+			help='Client ID of the client that will be checked')
+	parser_subscriber_pending.set_defaults(func=subriber_pending)
 
 	# Evaluate Arguments
 	args = parser.parse_args()
