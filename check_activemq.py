@@ -23,7 +23,7 @@ import argparse
 import fnmatch
 import nagiosplugin as np
 
-PLUGIN_VERSION = "0.6"
+PLUGIN_VERSION = "0.6.1"
 
 PREFIX = 'org.apache.activemq:'
 
@@ -384,6 +384,18 @@ def dlqcheck(args):
 
 
 
+def add_warn_crit(parser, what):
+	parser.add_argument('-w', '--warn',
+			metavar='WARN', type=int, default=10,
+			help='Warning if ' + what + ' is greater. (default: %(default)s)')
+	parser.add_argument('-c', '--crit',
+			metavar='CRIT', type=int, default=100,
+			help='Critical if ' + what + ' is greater. (default: %(default)s)')
+
+
+
+
+
 @np.guarded
 def main():
 
@@ -425,12 +437,7 @@ def main():
 			        or more queues on the ActiveMQ server.
 			        You can specify a queue name to check (even a pattern);
 			        see description of the 'queue' paramter for details.""")
-	parser_queuesize.add_argument('-w', '--warn',
-			metavar='WARN', type=int, default=10,
-			help='Warning if Queue Size is greater. (default: %(default)s)')
-	parser_queuesize.add_argument('-c', '--crit',
-			metavar='CRIT', type=int, default=100,
-			help='Critical if Queue Size is greater. (default: %(default)s)')
+	add_warn_crit(parser_queuesize, 'Queue Size')
 	parser_queuesize.add_argument('queue', nargs='?',
 			help='''Name of the Queue that will be checked.
 			        If left empty, all Queues will be checked.
@@ -476,12 +483,7 @@ def main():
 			help='Name of the subscription thath will be checked.')
 	parser_subscriber_pending.add_argument('--clientId', required=True,
 			help='The ID of the client that is involved in the specified subscription.')
-	parser_subscriber_pending.add_argument('-w', '--warn',
-			metavar='WARN', type=int, default=10,
-			help='Warning if there are more Pending Messages. (default: %(default)s)')
-	parser_subscriber_pending.add_argument('-c', '--crit',
-			metavar='CRIT', type=int, default=100,
-			help='Critical if there are more Pending Messages. (default: %(default)s)')
+	add_warn_crit(parser_subscriber_pending, 'Pending Messages')
 	parser_subscriber_pending.set_defaults(func=subscriber_pending)
 
 	# Sub-Parser for dlqcheck
@@ -492,12 +494,7 @@ def main():
 	parser_dlq.add_argument('--dlq', #required=False,
 			default='ActiveMQ.DLQ',
 			help='Name of the DLQ to check. (default: %(default)s)')
-	parser_dlq.add_argument('-w', '--warn',
-			metavar='WARN', type=int, default=10,
-			help='Warning if DLQ Queue Size is greater. (default: %(default)s)')
-	parser_dlq.add_argument('-c', '--crit',
-			metavar='CRIT', type=int, default=100,
-			help='Critical if DLQ Queue Size is greater. (default: %(default)s)')
+	add_warn_crit(parser_dlq, 'DLQ Queue Size')
 	parser_dlq.set_defaults(func=dlqcheck)
 
 	# Evaluate Arguments
