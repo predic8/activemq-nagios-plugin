@@ -23,7 +23,7 @@ import argparse
 import fnmatch
 import nagiosplugin as np
 
-PLUGIN_VERSION = "0.5.1"
+PLUGIN_VERSION = "0.6"
 
 PREFIX = 'org.apache.activemq:'
 
@@ -349,6 +349,41 @@ def subscriber_pending(args):
 
 
 
+def dlqcheck(args):
+
+	class ActiveMqDlqScalarContext(np.ScalarContext):
+		def evaluate(self, metric, resource):
+			if metric.value < 0:
+				return self.result_cls(np.Critical, metric=metric)
+			return super(ActiveMqDlqScalarContext, self).evaluate(metric, resource)
+		def describe(self, metric):
+			if metric.value < 0:
+				return 'ERROR: ' + metric.name
+			return super(ActiveMqDlqScalarContext, self).describe(metric)
+
+	class ActiveMqDlq(np.Resource):
+		def probe(self):
+			try:
+				dlq = loadJson(queue_url(args, args.dlq))
+				if dlq['status'] != 200:
+					return np.Metric('DLQ does not exist', -1, context='dlq')
+				return np.Metric('DLQ Queue Size', dlq['value']['QueueSize'], min=0, context='dlq')
+			except IOError as e:
+				return np.Metric('Fetching network FAILED: ' + str(e), -1, context='dlq')
+			except ValueError as e:
+				return np.Metric('Decoding Json FAILED: ' + str(e), -1, context='dlq')
+			except KeyError as e:
+				return np.Metric('Getting Queue(s) FAILED: ' + str(e), -1, context='dlq')
+
+	np.Check(
+		ActiveMqDlq(),
+		ActiveMqDlqScalarContext('dlq', args.warn, args.crit),
+	).main()
+
+
+
+
+
 @np.guarded
 def main():
 
@@ -448,6 +483,22 @@ def main():
 			metavar='CRIT', type=int, default=100,
 			help='Critical if there are more Pending Messages. (default: %(default)s)')
 	parser_subscriber_pending.set_defaults(func=subscriber_pending)
+
+	# Sub-Parser for dlqcheck
+	parser_dlq = subparsers.add_parser('dlqcheck',
+			help="""Check DLQ (Dead Letter Queue):
+			        This mode checks if the DLQ exists and if it does
+					it checks if there are too many messages in it.""")
+	parser_dlq.add_argument('--dlq', #required=False,
+			default='ActiveMQ.DLQ',
+			help='Name of the DLQ to check. (default: %(default)s)')
+	parser_dlq.add_argument('-w', '--warn',
+			metavar='WARN', type=int, default=10,
+			help='Warning if DLQ Queue Size is greater. (default: %(default)s)')
+	parser_dlq.add_argument('-c', '--crit',
+			metavar='CRIT', type=int, default=100,
+			help='Critical if DLQ Queue Size is greater. (default: %(default)s)')
+	parser_dlq.set_defaults(func=dlqcheck)
 
 	# Evaluate Arguments
 	args = parser.parse_args()
