@@ -23,7 +23,7 @@ import argparse
 import fnmatch
 import nagiosplugin as np
 
-PLUGIN_VERSION = "0.5"
+PLUGIN_VERSION = "0.5.1"
 
 PREFIX = 'org.apache.activemq:'
 
@@ -159,7 +159,7 @@ def health(args):
 
 
 def subscriber(args):
-	""" In the subscriber module there are several error codes that are used internally.
+	""" There are several internal error codes for the subscriber module:
 	    -1   Miscellaneous Error (network, json, key value)
 	    -2   Topic Name is invalid / doesn't exist
 	    -3   Topic has no Subscribers
@@ -194,8 +194,8 @@ def subscriber(args):
 			elif metric.value == -4:
 				return 'Subscriber ID ' + args.clientId + ' IS INVALID / DOES NOT EXIST'
 			return ('Client ' + args.clientId + ' is an '
-			        +('active'if metric.value==True else 'INACTIVE')
-			        +' subscriber of Topic ' + args.topic)
+			        + ('active' if metric.value == True else 'INACTIVE')
+			        + ' subscriber of Topic ' + args.topic)
 
 	class ActiveMqSubscriber(np.Resource):
 		def probe(self):
@@ -207,8 +207,9 @@ def subscriber(args):
 
 				subs = resp['value']['Subscriptions'] # Subscriptions for Topic
 
-				def client_is_active_subscriber(clientId, subscription):
-					subResp = loadJson(make_url(args, urllib.quote(subscription['objectName']))) # get the subscription
+				def client_is_active_subscriber(subscription):
+					subUrl = make_url(args, urllib.quote(subscription['objectName']))
+					subResp = loadJson(subUrl) # get the subscription
 
 					if subResp['value']['DestinationName'] != args.topic: # should always hold
 						return -2 # Topic is invalid / doesn't exist
@@ -217,7 +218,7 @@ def subscriber(args):
 					return subResp['value']['Active'] # subscribtion active?
 
 				# check if clientId is among the subscribers
-				analyze = [client_is_active_subscriber(args.clientId, s) for s in subs]
+				analyze = [client_is_active_subscriber(s) for s in subs]
 				if not analyze:
 					return np.Metric('subscription', -3, context='subscriber')
 				if -2 in analyze: # should never occur, just for safety
@@ -264,7 +265,7 @@ def exists(args):
 				return 'Found Queue with name ' + args.name
 			if metric.value == 2:
 				return 'Found Topic with name ' + args.name
-			return super(ActiveMqExistsScalarContext, self).describe(metric)
+			return super(ActiveMqExistsContext, self).describe(metric)
 
 	class ActiveMqExists(np.Resource):
 		def probe(self):
@@ -316,15 +317,18 @@ def subscriber_pending(args):
 		def probe(self):
 			try:
 				resp = loadJson(query_url(args))
-				for queue in ( resp['value']['TopicSubscribers'] + resp['value']['InactiveDurableTopicSubscribers'] ):
-					qJ = loadJson(make_url(args, queue['objectName']))['value']
+				subs = (resp['value']['TopicSubscribers'] +
+				        resp['value']['InactiveDurableTopicSubscribers'])
+				for sub in subs:
+					qJ = loadJson(make_url(args, sub['objectName']))['value']
 					if not qJ['SubscriptionName'] == args.subscription:
 						continue # skip subscriber
 					if not qJ['ClientId'] == args.clientId:
 						# When this if is entered, we have found the correct
 						# subscription, but the clientId doesn't match
-						return np.Metric('ClientId error: Expected: %s. Got: %s' % (args.clientId, qJ['ClientId']),
-						                  -1, context='subscriber_pending')
+						return np.Metric('ClientId error: Expected: %s. Got: %s'
+						                  % (args.clientId, qJ['ClientId']),
+						                 -1, context='subscriber_pending')
 					return np.Metric('Pending Messages for %s' % qJ['SubscriptionName'],
 					                 qJ['PendingQueueSize'], min=0,
 					                 context='subscriber_pending')
@@ -353,7 +357,7 @@ def main():
 
 	parser.add_argument('-v', '--version', action='version',
 			help='Print version number',
-			version=( '%(prog)s version ' + str(PLUGIN_VERSION) )
+			version='%(prog)s version ' + str(PLUGIN_VERSION)
 	)
 
 	connection = parser.add_argument_group('Connection')
