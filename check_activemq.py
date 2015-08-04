@@ -23,7 +23,7 @@ import argparse
 import fnmatch
 import nagiosplugin as np
 
-PLUGIN_VERSION = "0.6.1"
+PLUGIN_VERSION = "0.6.2"
 
 PREFIX = 'org.apache.activemq:'
 
@@ -74,15 +74,14 @@ def queuesize(args):
 		def probe(self):
 			try:
 				for queue in loadJson(query_url(args))['value']['Queues']:
-						qJ = loadJson(make_url(args, queue['objectName']))['value']
-						if qJ['Name'].startswith('ActiveMQ'):
-							continue # skip internal ActiveMQ queues
-						if (self.pattern
-								and fnmatch.fnmatch(qJ['Name'], self.pattern)
-								or not self.pattern):
-							yield np.Metric('Queue Size of %s' % qJ['Name'],
-														qJ['QueueSize'], min=0,
-														context='size')
+					qJ = loadJson(make_url(args, queue['objectName']))['value']
+					if qJ['Name'].startswith('ActiveMQ'):
+						continue # skip internal ActiveMQ queues
+					if (self.pattern
+							and fnmatch.fnmatch(qJ['Name'], self.pattern)
+							or not self.pattern):
+						yield np.Metric('Queue Size of %s' % qJ['Name'],
+						                qJ['QueueSize'], min=0, context='size')
 			except IOError as e:
 				yield np.Metric('Fetching network FAILED: ' + str(e), -1, context='size')
 			except ValueError as e:
@@ -103,19 +102,17 @@ def queuesize(args):
 				return super(ActiveMqQueueSizeSummary, self).ok(results)
 
 	if args.queue:
-		check = np.Check(
-				ActiveMqQueueSize(args.queue), ## check ONE queue (or glob)
-				ActiveMqQueueSizeContext('size', args.warn, args.crit),
-				ActiveMqQueueSizeSummary()
-			)
-		check.main()
+		np.Check(
+			ActiveMqQueueSize(args.queue), ## check ONE queue (or glob)
+			ActiveMqQueueSizeContext('size', args.warn, args.crit),
+			ActiveMqQueueSizeSummary()
+		).main()
 	else:
-		check = np.Check(
-				ActiveMqQueueSize(), # check ALL queues
-				ActiveMqQueueSizeContext('size', args.warn, args.crit),
-				ActiveMqQueueSizeSummary()
-			)
-		check.main()
+		np.Check(
+			ActiveMqQueueSize(), # check ALL queues
+			ActiveMqQueueSizeContext('size', args.warn, args.crit),
+			ActiveMqQueueSizeSummary()
+		).main()
 
 
 
@@ -148,11 +145,10 @@ def health(args):
 			except KeyError as e:
 				return np.Metric('Getting Values FAILED: ' + str(e), -1, context='health')
 
-	check = np.Check(
-			ActiveMqHealth(), ## check ONE queue
-			ActiveMqHealthContext('health')
-		)
-	check.main()
+	np.Check(
+		ActiveMqHealth(), ## check ONE queue
+		ActiveMqHealthContext('health')
+	).main()
 
 
 
@@ -237,11 +233,10 @@ def subscriber(args):
 			except KeyError as e:
 				return np.Metric('Getting Values FAILED: ' + str(e), -1, context='subscriber')
 
-	check = np.Check(
-			ActiveMqSubscriber(),
-			ActiveMqSubscriberContext('subscriber')
-		)
-	check.main()
+	np.Check(
+		ActiveMqSubscriber(),
+		ActiveMqSubscriberContext('subscriber')
+	).main()
 
 
 
@@ -287,11 +282,10 @@ def exists(args):
 			except KeyError as e:
 				return np.Metric('Getting Queue(s) FAILED: ' + str(e), -1, context='exists')
 
-	check = np.Check(
-				ActiveMqExists(),
-				ActiveMqExistsContext('exists')
-		)
-	check.main()
+	np.Check(
+		ActiveMqExists(),
+		ActiveMqExistsContext('exists')
+	).main()
 
 
 
@@ -339,11 +333,10 @@ def subscriber_pending(args):
 			except KeyError as e:
 				return np.Metric('Getting Subscriber FAILED: ' + str(e), -1, context='subscriber_pending')
 
-	check = np.Check(
-			ActiveMqSubscriberPending(),
-			ActiveMqSubscriberPendingContext('subscriber_pending', args.warn, args.crit),
-		)
-	check.main()
+	np.Check(
+		ActiveMqSubscriberPending(),
+		ActiveMqSubscriberPendingContext('subscriber_pending', args.warn, args.crit),
+	).main()
 
 
 
@@ -386,11 +379,11 @@ def dlqcheck(args):
 
 def add_warn_crit(parser, what):
 	parser.add_argument('-w', '--warn',
-			metavar='WARN', type=int, default=10,
-			help='Warning if ' + what + ' is greater. (default: %(default)s)')
+		metavar='WARN', type=int, default=10,
+		help='Warning if ' + what + ' is greater. (default: %(default)s)')
 	parser.add_argument('-c', '--crit',
-			metavar='CRIT', type=int, default=100,
-			help='Critical if ' + what + ' is greater. (default: %(default)s)')
+		metavar='CRIT', type=int, default=100,
+		help='Critical if ' + what + ' is greater. (default: %(default)s)')
 
 
 
@@ -403,97 +396,98 @@ def main():
 	parser = argparse.ArgumentParser(description=__doc__)
 
 	parser.add_argument('-v', '--version', action='version',
-			help='Print version number',
-			version='%(prog)s version ' + str(PLUGIN_VERSION)
+		help='Print version number',
+		version='%(prog)s version ' + str(PLUGIN_VERSION)
 	)
 
 	connection = parser.add_argument_group('Connection')
 	connection.add_argument('--host', default='localhost',
-			help='ActiveMQ Server Hostname (default: %(default)s)')
+		help='ActiveMQ Server Hostname (default: %(default)s)')
 	connection.add_argument('--port', type=int, default=8161,
-			help='ActiveMQ Server Port (default: %(default)s)')
+		help='ActiveMQ Server Port (default: %(default)s)')
 	connection.add_argument('--url-tail',
-			default='api/jolokia/read',
-			#default='hawtio/jolokia/read',
-			help='Jolokia URL tail part. (default: %(default)s)')
+		default='api/jolokia/read',
+		#default='hawtio/jolokia/read',
+		help='Jolokia URL tail part. (default: %(default)s)')
 	connection.add_argument('-j', '--jolokia-url',
-			help='''Override complete Jolokia URL.
-					(Default: "http://USER:PWD@HOST:PORT/URLTAIL/").
-					The parameters --user, --pwd, --host and --port are IGNORED
-					if this paramter is specified!
-					Please set this parameter carefully as it is not validated.''')
+		help='''Override complete Jolokia URL.
+		        (Default: "http://USER:PWD@HOST:PORT/URLTAIL/").
+		        The parameters --user, --pwd, --host and --port are IGNORED
+		        if this paramter is specified!
+		        Please set this parameter carefully as it essential
+		        for the program to work properly and is not validated.''')
 
 	credentials = parser.add_argument_group('Credentials')
 	credentials.add_argument('-u', '--user', default='admin',
-			help='Username for ActiveMQ admin account. (default: %(default)s)')
+		help='Username for ActiveMQ admin account. (default: %(default)s)')
 	credentials.add_argument('-p', '--pwd', default='admin',
-			help='Password for ActiveMQ admin account. (default: %(default)s)')
+		help='Password for ActiveMQ admin account. (default: %(default)s)')
 
 	subparsers = parser.add_subparsers()
 
 	# Sub-Parser for queuesize
 	parser_queuesize = subparsers.add_parser('queuesize',
-			help="""Check QueueSize: This mode checks the queue size of one
-			        or more queues on the ActiveMQ server.
-			        You can specify a queue name to check (even a pattern);
-			        see description of the 'queue' paramter for details.""")
+		help="""Check QueueSize: This mode checks the queue size of one
+		        or more queues on the ActiveMQ server.
+		        You can specify a queue name to check (even a pattern);
+		        see description of the 'queue' paramter for details.""")
 	add_warn_crit(parser_queuesize, 'Queue Size')
 	parser_queuesize.add_argument('queue', nargs='?',
-			help='''Name of the Queue that will be checked.
-			        If left empty, all Queues will be checked.
-			        This also can be a Unix shell-style Wildcard
-			        (much less powerful than a RegEx)
-			        where * and ? can be used.''')
+		help='''Name of the Queue that will be checked.
+		        If left empty, all Queues will be checked.
+		        This also can be a Unix shell-style Wildcard
+		        (much less powerful than a RegEx)
+		        where * and ? can be used.''')
 	parser_queuesize.set_defaults(func=queuesize)
 
 	# Sub-Parser for health
 	parser_health = subparsers.add_parser('health',
-			help="""Check Health: This mode checks if the current status is 'Good'.""")
+		help="""Check Health: This mode checks if the current status is 'Good'.""")
 	# no additional arguments necessary
 	parser_health.set_defaults(func=health)
 
 	# Sub-Parser for subscriber
 	parser_subscriber = subparsers.add_parser('subscriber',
-			help="""Check Subscriber: This mode checks if the given 'clientId'
-			        is a subscriber of the specified 'topic'.""")
+		help="""Check Subscriber: This mode checks if the given 'clientId'
+		        is a subscriber of the specified 'topic'.""")
 	parser_subscriber.add_argument('--clientId', required=True,
-			help='Client ID of the client that will be checked')
+		help='Client ID of the client that will be checked')
 	parser_subscriber.add_argument('--topic', required=True,
-			help='Name of the Topic that will be checked.')
+		help='Name of the Topic that will be checked.')
 	parser_subscriber.set_defaults(func=subscriber)
 
 	# Sub-Parser for exists
 	parser_exists = subparsers.add_parser('exists',
-			help="""Check Exists: This mode checks if a Queue or Topic with the
-			        given name exists.
-			        If either a Queue or a Topic with this name exist,
-					this mode yields OK.""")
+		help="""Check Exists: This mode checks if a Queue or Topic with the
+		        given name exists.
+		        If either a Queue or a Topic with this name exist,
+				this mode yields OK.""")
 	parser_exists.add_argument('--name', required=True,
-			help='Name of the Queue or Topic that will be checked.')
+		help='Name of the Queue or Topic that will be checked.')
 	parser_exists.set_defaults(func=exists)
 
 	# Sub-Parser for queuesize-subscriber
 	parser_subscriber_pending = subparsers.add_parser('subscriber-pending',
-			help="""Check Subscriber-Pending:
-			        This mode checks that the given subscriber doesn't have
-			        too many pending messages (specified with -w and -c)
-			        and that the given clientId the Id that is involved in
-			        the subscription.""")
+		help="""Check Subscriber-Pending:
+		        This mode checks that the given subscriber doesn't have
+		        too many pending messages (specified with -w and -c)
+		        and that the given clientId the Id that is involved in
+		        the subscription.""")
 	parser_subscriber_pending.add_argument('--subscription', required=True,
-			help='Name of the subscription thath will be checked.')
+		help='Name of the subscription thath will be checked.')
 	parser_subscriber_pending.add_argument('--clientId', required=True,
-			help='The ID of the client that is involved in the specified subscription.')
+		help='The ID of the client that is involved in the specified subscription.')
 	add_warn_crit(parser_subscriber_pending, 'Pending Messages')
 	parser_subscriber_pending.set_defaults(func=subscriber_pending)
 
 	# Sub-Parser for dlqcheck
 	parser_dlq = subparsers.add_parser('dlqcheck',
-			help="""Check DLQ (Dead Letter Queue):
-			        This mode checks if the DLQ exists and if it does
-					it checks if there are too many messages in it.""")
+		help="""Check DLQ (Dead Letter Queue):
+		        This mode checks if the DLQ exists and if it does
+		        it checks if there are too many messages in it.""")
 	parser_dlq.add_argument('--dlq', #required=False,
-			default='ActiveMQ.DLQ',
-			help='Name of the DLQ to check. (default: %(default)s)')
+		default='ActiveMQ.DLQ',
+		help='Name of the DLQ to check. (default: %(default)s)')
 	add_warn_crit(parser_dlq, 'DLQ Queue Size')
 	parser_dlq.set_defaults(func=dlqcheck)
 
