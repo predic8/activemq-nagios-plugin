@@ -18,13 +18,14 @@
 """ Project Home: https://github.com/predic8/activemq-nagios-plugin """
 
 import os
+import os.path as path
 import urllib
 import json
 import argparse
 import fnmatch
 import nagiosplugin as np
 
-PLUGIN_VERSION = "0.7"
+PLUGIN_VERSION = "0.7.1"
 
 PREFIX = 'org.apache.activemq:'
 
@@ -356,17 +357,19 @@ def dlq(args):
 		def __init__(self, prefix):
 			super(ActiveMqDlq, self).__init__()
 			self.cache = None
-			self.cachefile = 'activemq-nagios-plugin-cache.json'
+			self.cachedir = path.join(path.expanduser('~'), '.cache', 'activemq-nagios-plugin')
+			self.cachefile = path.join(self.cachedir, 'dlq-cache.json')
 			self.parse_cache()
 			self.prefix = prefix
 		def parse_cache(self): # deserialize
 			if not os.path.exists(self.cachefile):
 				self.cache = {}
-				self.write_cache()
 			else:
 				with open(self.cachefile, 'r') as cachefile:
 					self.cache = json.load(cachefile)
 		def write_cache(self): # serialize
+			if not os.path.exists(self.cachedir):
+				os.makedirs(self.cachedir)
 			with open(self.cachefile, 'w') as cachefile:
 				json.dump(self.cache, cachefile)
 		def probe(self):
