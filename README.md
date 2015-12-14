@@ -93,6 +93,9 @@ All checks return UNKNOWN if the broker isn't reachable on the network.
   since the last check.
 - This mode saves it's state in the file
   ``$HOME/.cache/activemq-nagios-plugin/dlq-cache.json``
+- When you want to use this check, it is recommended that you invoke the
+  plugin rather often from Nagios (e.g. every minute or every 30 seconds)
+  to have a better coverage of your ActiveMQ's state.
 - Note (this might lead to confusion): When the plugin yields a message for
   a specific queue (e.g. ``'No additional messages in ActiveMQ.DLQ.Test'=0``)
   the `=0` means that there are `0` additional messages since the last check,
