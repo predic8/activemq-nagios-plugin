@@ -17,13 +17,14 @@
 
 """ Project Home: https://github.com/predic8/activemq-nagios-plugin """
 
+import os
 import urllib
 import json
 import argparse
 import fnmatch
 import nagiosplugin as np
 
-PLUGIN_VERSION = "0.6.2"
+PLUGIN_VERSION = "0.7"
 
 PREFIX = 'org.apache.activemq:'
 
@@ -93,9 +94,9 @@ def queuesize(args):
 		def ok(self, results):
 			if len(results) > 1:
 				lenQ = str(len(results))
-				minQ = str(min(results, key=lambda r: r.metric.value).metric.value)
+				minQ = str(min([r.metric.value for r in results]))
 				avgQ = str(sum([r.metric.value for r in results]) / len(results))
-				maxQ = str(max(results, key=lambda r: r.metric.value).metric.value)
+				maxQ = str(max([r.metric.value for r in results]))
 				return ('Checked ' + lenQ + ' queues with lengths min/avg/max = '
 						+ '/'.join([minQ, avgQ, maxQ]))
 			else:
@@ -342,35 +343,75 @@ def subscriber_pending(args):
 
 
 
-def dlqcheck(args):
+def dlq(args):
 
 	class ActiveMqDlqScalarContext(np.ScalarContext):
 		def evaluate(self, metric, resource):
-			if metric.value < 0:
+			if metric.value > 0:
 				return self.result_cls(np.Critical, metric=metric)
-			return super(ActiveMqDlqScalarContext, self).evaluate(metric, resource)
-		def describe(self, metric):
-			if metric.value < 0:
-				return 'ERROR: ' + metric.name
-			return super(ActiveMqDlqScalarContext, self).describe(metric)
+			else:
+				return self.result_cls(np.Ok, metric=metric)
 
 	class ActiveMqDlq(np.Resource):
+		def __init__(self, prefix):
+			super(ActiveMqDlq, self).__init__()
+			self.cache = None
+			self.cachefile = 'activemq-nagios-plugin-cache.json'
+			self.parse_cache()
+			self.prefix = prefix
+		def parse_cache(self): # deserialize
+			if not os.path.exists(self.cachefile):
+				self.cache = {}
+				self.write_cache()
+			else:
+				with open(self.cachefile, 'r') as cachefile:
+					self.cache = json.load(cachefile)
+		def write_cache(self): # serialize
+			with open(self.cachefile, 'w') as cachefile:
+				json.dump(self.cache, cachefile)
 		def probe(self):
 			try:
-				dlq = loadJson(queue_url(args, args.dlq))
-				if dlq['status'] != 200:
-					return np.Metric('DLQ does not exist', -1, context='dlq')
-				return np.Metric('DLQ Queue Size', dlq['value']['QueueSize'], min=0, context='dlq')
+				for queue in loadJson(query_url(args))['value']['Queues']:
+					qJ = loadJson(make_url(args, queue['objectName']))['value']
+					if qJ['Name'].startswith(self.prefix):
+						oldcount = self.cache.get(qJ['Name'])
+
+						if oldcount == None:
+							more = 0
+							msg = 'First check for DLQ'
+						else:
+							assert isinstance(oldcount, int)
+							more = qJ['QueueSize'] - oldcount
+							if more == 0:
+								msg = 'No additional messages in'
+							elif more > 0:
+								msg = 'More messages in'
+							else: # more < 0
+								msg = 'Less messages in'
+						self.cache[qJ['Name']] = qJ['QueueSize']
+						self.write_cache()
+						yield np.Metric(msg + ' %s' % qJ['Name'],
+										more, context='dlq')
 			except IOError as e:
-				return np.Metric('Fetching network FAILED: ' + str(e), -1, context='dlq')
+				yield np.Metric('Fetching network FAILED: ' + str(e), -1, context='dlq')
 			except ValueError as e:
-				return np.Metric('Decoding Json FAILED: ' + str(e), -1, context='dlq')
+				yield np.Metric('Decoding Json FAILED: ' + str(e), -1, context='dlq')
 			except KeyError as e:
-				return np.Metric('Getting Queue(s) FAILED: ' + str(e), -1, context='dlq')
+				yield np.Metric('Getting Queue(s) FAILED: ' + str(e), -1, context='dlq')
+
+	class ActiveMqDlqSummary(np.Summary):
+		def ok(self, results):
+			if len(results) > 1:
+				lenQ = str(len(results))
+				bigger = str(len([r.metric.value for r in results if r.metric.value > 0]))
+				return ('Checked ' + lenQ + ' DLQs of which ' + bigger + ' contain additional messages.')
+			else:
+				return super(ActiveMqQueueSizeSummary, self).ok(results)
 
 	np.Check(
-		ActiveMqDlq(),
-		ActiveMqDlqScalarContext('dlq', args.warn, args.crit),
+		ActiveMqDlq(args.prefix),
+		ActiveMqDlqScalarContext('dlq'),
+		ActiveMqDlqSummary()
 	).main()
 
 
@@ -480,16 +521,16 @@ def main():
 	add_warn_crit(parser_subscriber_pending, 'Pending Messages')
 	parser_subscriber_pending.set_defaults(func=subscriber_pending)
 
-	# Sub-Parser for dlqcheck
-	parser_dlq = subparsers.add_parser('dlqcheck',
+	# Sub-Parser for dlq
+	parser_dlq = subparsers.add_parser('dlq',
 		help="""Check DLQ (Dead Letter Queue):
-		        This mode checks if the DLQ exists and if it does
-		        it checks if there are too many messages in it.""")
-	parser_dlq.add_argument('--dlq', #required=False,
-		default='ActiveMQ.DLQ',
-		help='Name of the DLQ to check. (default: %(default)s)')
+		        This mode checks if there are new messages in DLQs
+		        with the specified prefix.""")
+	parser_dlq.add_argument('--prefix', #required=False,
+		default='ActiveMQ.DLQ.',
+		help='DLQ prefix to check. (default: %(default)s)')
 	add_warn_crit(parser_dlq, 'DLQ Queue Size')
-	parser_dlq.set_defaults(func=dlqcheck)
+	parser_dlq.set_defaults(func=dlq)
 
 	# Evaluate Arguments
 	args = parser.parse_args()

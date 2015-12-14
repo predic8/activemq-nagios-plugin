@@ -84,13 +84,19 @@ All checks return UNKNOWN if the broker isn't reachable on the network.
  - ```--clientId``` specifies a client ID
 - Returns Critical if `clientId` is not the Client Id of the given subscription.
 
-#### dlqcheck
-- Check the size of the DLQ (Dead Letter Queue).
+#### dlq
+- Check if there are new messages in a DLQ (Dead Letter Queue).
 - Additional parameters:
- - ```-w WARN``` specifies the Warning threshold (default 10)
- - ```-c CRIT``` specifies the Critical threshold (default 100)
- - ```--dlq QUEUE``` - manually specify DLQ queue name (default 'ActiveMQ.DLQ')
-- Returns Critical if the DLQ does not exist.
+ - ```--prefix PREFIX``` - specify DLQ prefix, all queues with a matching prefix will be checked (default 'ActiveMQ.DLQ.')
+- Returns Unknown if no Queues with the specified PREFIX were found.
+- Returns Critical if one of the Queues with a matching prefix contains more messages
+  since the last check.
+- This mode saves it's state in a file called activemq-nagios-plugin-cache.json in the same folder as the script
+- Important (this might lead to confusion): When the plugin yields a message for
+  a specific queue (e.g. ``'No additional messages in ActiveMQ.DLQ.Test'=0``)
+  the `=0` means that there are 0 additional messages since the last check, it
+  does NOT mean that there are 0 messages in the queue. (Use queuesize if you
+  want to check this.)
 
 
 ## Examples. Check
@@ -105,3 +111,5 @@ All checks return UNKNOWN if the broker isn't reachable on the network.
 - if a queue or a topic with a given name exists
  - ```./check_activemq.py exists --name someQueueName```
  - ```./check_activemq.py exists --name someTopicName```
+- if there are new messages in the Dead Letter Queue
+ - ```./check_activemq.py dlq --prefix ImportantCompany.DLQ.```
