@@ -409,7 +409,7 @@ def dlq(args):
 				bigger = str(len([r.metric.value for r in results if r.metric.value > 0]))
 				return ('Checked ' + lenQ + ' DLQs of which ' + bigger + ' contain additional messages.')
 			else:
-				return super(ActiveMqQueueSizeSummary, self).ok(results)
+				return super(ActiveMqDlqSummary, self).ok(results)
 
 	np.Check(
 		ActiveMqDlq(args.prefix),
