@@ -88,11 +88,12 @@ All checks return UNKNOWN if the broker isn't reachable on the network.
 - Check if there are new messages in a DLQ (Dead Letter Queue).
 - Additional parameters:
  - ```--prefix PREFIX``` - specify DLQ prefix, all queues with a matching prefix will be checked (default 'ActiveMQ.DLQ.')
+ - ```--cachedir CACHEDIR``` - specify base directory for state file (default '~/.cache')
 - Returns Unknown if no Queues with the specified PREFIX were found.
 - Returns Critical if one of the Queues with a matching prefix contains more messages
   since the last check.
 - This mode saves it's state in the file
-  ``$HOME/.cache/activemq-nagios-plugin/dlq-cache.json``
+  ``CACHEDIR/activemq-nagios-plugin/dlq-cache.json``
 - When you want to use this check, it is recommended that you invoke the
   plugin rather often from Nagios (e.g. every minute or every 30 seconds)
   to have a better coverage of your ActiveMQ's state.

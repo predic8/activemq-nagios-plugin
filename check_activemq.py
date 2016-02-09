@@ -64,11 +64,23 @@ def queuesize(args):
 		def evaluate(self, metric, resource):
 			if metric.value < 0:
 				return self.result_cls(np.Unknown, metric=metric)
-			return super(ActiveMqQueueSizeContext, self).evaluate(metric, resource)
+
+			if metric.value >= self.critical.end:
+				return self.result_cls(np.Critical, ActiveMqQueueSizeContext.fmt_violation(self.critical.end), metric)
+
+			if metric.value >= self.warning.end:
+				return self.result_cls(np.Warn, ActiveMqQueueSizeContext.fmt_violation(self.warning.end), metric)
+
+			return self.result_cls(np.Ok, None, metric)
+
 		def describe(self, metric):
 			if metric.value < 0:
 				return 'ERROR: ' + metric.name
 			return super(ActiveMqQueueSizeContext, self).describe(metric)
+
+		@staticmethod
+		def fmt_violation(max_value):
+			return 'Queue size is greater than or equal to %d' % max_value
 
 	class ActiveMqQueueSize(np.Resource):
 		def __init__(self, pattern=None):
@@ -77,8 +89,7 @@ def queuesize(args):
 			try:
 				for queue in loadJson(query_url(args))['value']['Queues']:
 					qJ = loadJson(make_url(args, queue['objectName']))['value']
-					if qJ['Name'].startswith('ActiveMQ'):
-						continue # skip internal ActiveMQ queues
+
 					if (self.pattern
 							and fnmatch.fnmatch(qJ['Name'], self.pattern)
 							or not self.pattern):
@@ -103,22 +114,16 @@ def queuesize(args):
 			else:
 				return super(ActiveMqQueueSizeSummary, self).ok(results)
 
-	if args.queue:
-		np.Check(
-			ActiveMqQueueSize(args.queue), ## check ONE queue (or glob)
-			ActiveMqQueueSizeContext('size', args.warn, args.crit),
-			ActiveMqQueueSizeSummary()
-		).main()
-	else:
-		np.Check(
-			ActiveMqQueueSize(), # check ALL queues
-			ActiveMqQueueSizeContext('size', args.warn, args.crit),
-			ActiveMqQueueSizeSummary()
-		).main()
+	np.Check(
+		ActiveMqQueueSize(args.queue) if args.queue else ActiveMqQueueSize(),
+		ActiveMqQueueSizeContext('size', args.warn, args.crit),
+		ActiveMqQueueSizeSummary()
+	).main(timeout=get_timeout())
 
 
-
-
+# when debugging the application, set the TIMEOUT env variable to 0 to disable the timeout during check execution
+def get_timeout():
+	return int(os.environ.get('TIMEOUT')) if 'TIMEOUT' in os.environ else 10
 
 def health(args):
 
@@ -150,10 +155,7 @@ def health(args):
 	np.Check(
 		ActiveMqHealth(), ## check ONE queue
 		ActiveMqHealthContext('health')
-	).main()
-
-
-
+	).main(timeout=get_timeout())
 
 
 def subscriber(args):
@@ -238,10 +240,7 @@ def subscriber(args):
 	np.Check(
 		ActiveMqSubscriber(),
 		ActiveMqSubscriberContext('subscriber')
-	).main()
-
-
-
+	).main(timeout=get_timeout())
 
 
 def exists(args):
@@ -287,10 +286,7 @@ def exists(args):
 	np.Check(
 		ActiveMqExists(),
 		ActiveMqExistsContext('exists')
-	).main()
-
-
-
+	).main(timeout=get_timeout())
 
 
 def subscriber_pending(args):
@@ -338,10 +334,7 @@ def subscriber_pending(args):
 	np.Check(
 		ActiveMqSubscriberPending(),
 		ActiveMqSubscriberPendingContext('subscriber_pending', args.warn, args.crit),
-	).main()
-
-
-
+	).main(timeout=get_timeout())
 
 
 def dlq(args):
@@ -354,10 +347,10 @@ def dlq(args):
 				return self.result_cls(np.Ok, metric=metric)
 
 	class ActiveMqDlq(np.Resource):
-		def __init__(self, prefix):
+		def __init__(self, prefix, cachedir):
 			super(ActiveMqDlq, self).__init__()
 			self.cache = None
-			self.cachedir = path.join(path.expanduser('~'), '.cache', 'activemq-nagios-plugin')
+			self.cachedir = path.join(path.expanduser(cachedir), 'activemq-nagios-plugin')
 			self.cachefile = path.join(self.cachedir, 'dlq-cache.json')
 			self.parse_cache()
 			self.prefix = prefix
@@ -412,10 +405,10 @@ def dlq(args):
 				return super(ActiveMqDlqSummary, self).ok(results)
 
 	np.Check(
-		ActiveMqDlq(args.prefix),
+		ActiveMqDlq(args.prefix, args.cachedir),
 		ActiveMqDlqScalarContext('dlq'),
 		ActiveMqDlqSummary()
-	).main()
+	).main(timeout=get_timeout())
 
 
 
@@ -424,10 +417,10 @@ def dlq(args):
 def add_warn_crit(parser, what):
 	parser.add_argument('-w', '--warn',
 		metavar='WARN', type=int, default=10,
-		help='Warning if ' + what + ' is greater. (default: %(default)s)')
+		help='Warning if ' + what + ' is greater than or equal to. (default: %(default)s)')
 	parser.add_argument('-c', '--crit',
 		metavar='CRIT', type=int, default=100,
-		help='Critical if ' + what + ' is greater. (default: %(default)s)')
+		help='Warning if ' + what + ' is greater than or equal to. (default: %(default)s)')
 
 
 
