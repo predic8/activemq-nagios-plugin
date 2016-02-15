@@ -525,6 +525,9 @@ def main():
 	parser_dlq.add_argument('--prefix', #required=False,
 		default='ActiveMQ.DLQ.',
 		help='DLQ prefix to check. (default: %(default)s)')
+	parser_dlq.add_argument('--cachedir', #required=False,
+		default='~/.cache', 
+		help='DLQ cache base directory. (default: %(default)s)')
 	add_warn_crit(parser_dlq, 'DLQ Queue Size')
 	parser_dlq.set_defaults(func=dlq)
 
