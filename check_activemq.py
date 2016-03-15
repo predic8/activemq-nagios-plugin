@@ -39,7 +39,7 @@ def make_url(args, dest):
 	)
 
 def query_url(args, dest=''):
-	return make_url(args, PREFIX + 'type=Broker,brokerName=localhost'+dest)
+	return make_url(args, PREFIX + 'type=Broker,brokerName='+args.brokerName+dest)
 
 def queue_url(args, queue):
 	return query_url(args, ',destinationType=Queue,destinationName='+urllib.quote(queue))
@@ -442,6 +442,8 @@ def main():
 		help='ActiveMQ Server Hostname (default: %(default)s)')
 	connection.add_argument('--port', type=int, default=8161,
 		help='ActiveMQ Server Port (default: %(default)s)')
+	connection.add_argument('-b', '--brokerName', default='localhost',
+		help='Name of your broker. (default: %(default)s)')
 	connection.add_argument('--url-tail',
 		default='api/jolokia/read',
 		#default='hawtio/jolokia/read',
