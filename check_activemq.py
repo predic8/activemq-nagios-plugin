@@ -24,6 +24,7 @@ import json
 import argparse
 import fnmatch
 import nagiosplugin as np
+import pprint
 
 PLUGIN_VERSION = "0.7.2"
 
@@ -119,6 +120,70 @@ def queuesize(args):
 		ActiveMqQueueSizeContext('size', args.warn, args.crit),
 		ActiveMqQueueSizeSummary()
 	).main(timeout=get_timeout())
+
+
+def topicsize(args):
+
+	class ActiveMqTopicSizeContext(np.ScalarContext):
+		def evaluate(self, metric, resource):
+			if metric.value < 0:
+				return self.result_cls(np.Unknown, metric=metric)
+
+			if metric.value >= self.critical.end:
+				return self.result_cls(np.Critical, ActiveMqTopicSizeContext.fmt_violation(self.critical.end), metric)
+
+			if metric.value >= self.warning.end:
+				return self.result_cls(np.Warn, ActiveMqTopicSizeContext.fmt_violation(self.warning.end), metric)
+
+			return self.result_cls(np.Ok, None, metric)
+
+		def describe(self, metric):
+			if metric.value < 0:
+				return 'ERROR: ' + metric.name
+			return super(ActiveMqTopicSizeContext, self).describe(metric)
+
+		@staticmethod
+		def fmt_violation(max_value):
+			return 'Topic size is greater than or equal to %d' % max_value
+
+	class ActiveMqTopicSize(np.Resource):
+		def __init__(self, pattern=None):
+			self.pattern = pattern
+		def probe(self):
+			try:
+				for queue in loadJson(query_url(args))['value']['Topics']:
+					qJ = loadJson(make_url(args, queue['objectName']))['value']
+
+					if (self.pattern
+							and fnmatch.fnmatch(qJ['Name'], self.pattern)
+							or not self.pattern):
+						yield np.Metric('Topic Size of %s' % qJ['Name'],
+						                qJ['QueueSize'], min=0, context='size')
+			except IOError as e:
+				yield np.Metric('Fetching network FAILED: ' + str(e), -1, context='size')
+			except ValueError as e:
+				yield np.Metric('Decoding Json FAILED: ' + str(e), -1, context='size')
+			except KeyError as e:
+				yield np.Metric('Getting Topic(s) FAILED: ' + str(e), -1, context='size')
+
+	class ActiveMqTopicSizeSummary(np.Summary):
+		def ok(self, results):
+			if len(results) > 1:
+				lenQ = str(len(results))
+				minQ = str(min([r.metric.value for r in results]))
+				avgQ = str(sum([r.metric.value for r in results]) / len(results))
+				maxQ = str(max([r.metric.value for r in results]))
+				return ('Checked ' + lenQ + ' topics with lengths min/avg/max = '
+						+ '/'.join([minQ, avgQ, maxQ]))
+			else:
+				return super(ActiveMqTopicSizeSummary, self).ok(results)
+
+	np.Check(
+		ActiveMqTopicSize(args.topic) if args.topic else ActiveMqTopicSize(),
+		ActiveMqTopicSizeContext('size', args.warn, args.crit),
+		ActiveMqTopicSizeSummary()
+	).main(timeout=get_timeout())
+
 
 
 # when debugging the application, set the TIMEOUT env variable to 0 to disable the timeout during check execution
@@ -469,7 +534,7 @@ def main():
 		help="""Check QueueSize: This mode checks the queue size of one
 		        or more queues on the ActiveMQ server.
 		        You can specify a queue name to check (even a pattern);
-		        see description of the 'queue' paramter for details.""")
+		        see description of the 'queue' parameter for details.""")
 	add_warn_crit(parser_queuesize, 'Queue Size')
 	parser_queuesize.add_argument('queue', nargs='?',
 		help='''Name of the Queue that will be checked.
@@ -478,6 +543,21 @@ def main():
 		        (much less powerful than a RegEx)
 		        where * and ? can be used.''')
 	parser_queuesize.set_defaults(func=queuesize)
+
+    # Sub-Parser for topicsize
+	parser_topicsize = subparsers.add_parser('topicsize',
+		help="""Check TopicSize: This mode checks the topic size of one
+		        or more topics on the ActiveMQ server.
+		        You can specify a topic name to check (even a pattern);
+		        see description of the 'topic' parameter for details.""")
+	add_warn_crit(parser_topicsize, 'Topic Size')
+	parser_topicsize.add_argument('topic', nargs='?',
+		help='''Name of the Topic that will be checked.
+		        If left empty, all Topics will be checked.
+		        This also can be a Unix shell-style Wildcard
+		        (much less powerful than a RegEx)
+		        where * and ? can be used.''')
+	parser_topicsize.set_defaults(func=topicsize)
 
 	# Sub-Parser for health
 	parser_health = subparsers.add_parser('health',
